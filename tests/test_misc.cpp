@@ -5,6 +5,8 @@
 #include "includes.h"
 #include "test_sink.h"
 
+#include <vector>
+
 template <class T>
 std::string log_info(const T& what, spdlog::level::level_enum logger_level = spdlog::level::info) {
     std::ostringstream oss;
@@ -129,6 +131,60 @@ TEST_CASE("clone async", "[clone]") {
     REQUIRE(test_sink->lines().size() == 2);
     REQUIRE(test_sink->lines()[0] == "Some message 1");
     REQUIRE(test_sink->lines()[1] == "Some message 2");
+
+    spdlog::drop_all();
+}
+
+TEST_CASE("stack logger object", "[stack logger]") {
+    using spdlog::sinks::test_sink_mt;
+    auto test_sink = std::make_shared<test_sink_mt>();
+    auto logger = spdlog::logger("orig", test_sink);
+    logger.set_pattern("%v");
+
+    SECTION("just log") {
+        logger.info("Some message 1");
+        CHECK(test_sink->lines() == std::vector<std::string>{{"Some message 1"}});
+    }
+
+    SECTION("copy ctor") {
+        auto logger_copy = logger;
+        CHECK(logger_copy.name() == "orig");
+        CHECK(logger.sinks() == logger_copy.sinks());
+        CHECK(logger.level() == logger_copy.level());
+        CHECK(logger.flush_level() == logger_copy.flush_level());
+        logger.info("Some message 1");
+        logger_copy.info("Some message 2");
+        CHECK(test_sink->lines() ==
+              std::vector<std::string>{{"Some message 1"}, {"Some message 2"}});
+    }
+
+    SECTION("copy assignment") {
+        spdlog::logger logger_copy("another name");
+        logger_copy = logger;
+        CHECK(logger_copy.name() == "orig");
+        CHECK(logger.sinks() == logger_copy.sinks());
+        CHECK(logger.level() == logger_copy.level());
+        CHECK(logger.flush_level() == logger_copy.flush_level());
+        logger.info("Some message 1");
+        logger_copy.info("Some message 2");
+        CHECK(test_sink->lines() ==
+              std::vector<std::string>{{"Some message 1"}, {"Some message 2"}});
+    }
+
+    SECTION("move") {
+        auto logger2 = std::move(logger);
+        CHECK(logger2.name() == "orig");
+        logger.info("Some message 1");
+        logger2.info("Some message 3");
+        CHECK(test_sink->lines() == std::vector<std::string>{{"Some message 3"}});
+
+        logger = std::move(logger2);
+        CHECK(logger.name() == "orig");
+        logger.info("Some message 2");
+        logger2.info("Some message 4");
+        CHECK(test_sink->lines() ==
+              std::vector<std::string>{{"Some message 3"}, {"Some message 2"}});
+    }
 
     spdlog::drop_all();
 }
