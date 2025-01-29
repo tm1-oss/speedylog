@@ -16,6 +16,7 @@
 #include <chrono>
 #include <cstdio>
 #include <iomanip>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -65,8 +66,10 @@ struct daily_filename_format_calculator {
  * Note that old log files from previous executions will not be deleted by this class,
  * rotation and deletion is only applied while the program is running.
  */
-template <typename Mutex, typename FileNameCalc = daily_filename_calculator>
-class daily_file_sink final : public base_sink<Mutex> {
+template <typename Mutex,
+          typename FileNameCalc = daily_filename_calculator,
+          class Alloc = default_allocator_t>
+class daily_file_sink final : public base_sink<Mutex, Alloc> {
 public:
     // create daily file sink which rotates on given time
     daily_file_sink(filename_t base_filename,
@@ -98,7 +101,7 @@ public:
     }
 
     filename_t filename() {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         return file_helper_.filename();
     }
 
@@ -111,9 +114,9 @@ protected:
             file_helper_.open(filename, truncate_);
             rotation_tp_ = next_rotation_tp_();
         }
-        memory_buf_t formatted;
-        base_sink<Mutex>::formatter_->format(msg, formatted);
-        file_helper_.write(formatted);
+        basic_memory_buf_t<Alloc> formatted;
+        base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
+        file_helper_.write(details::to_string_view(formatted));
 
         // Do the cleaning only at the end because it might throw on failure.
         if (should_rotate && max_files_ > 0) {

@@ -28,18 +28,18 @@
 #include <vector>
 
 #ifndef SPDLOG_NO_EXCEPTIONS
-#define SPDLOG_LOGGER_CATCH(location)                                                 \
-    catch (const std::exception &ex) {                                                \
-        if (location.filename) {                                                      \
-            err_handler_(fmt_lib::format(SPDLOG_FMT_STRING("{} [{}({})]"), ex.what(), \
-                                         location.filename, location.line));          \
-        } else {                                                                      \
-            err_handler_(ex.what());                                                  \
-        }                                                                             \
-    }                                                                                 \
-    catch (...) {                                                                     \
-        err_handler_("Rethrowing unknown exception in logger");                       \
-        throw;                                                                        \
+#define SPDLOG_LOGGER_CATCH(location)                                                       \
+    catch (const std::exception &ex) {                                                      \
+        if (location.filename) {                                                            \
+            this->err_handler_(fmt_lib::format(SPDLOG_FMT_STRING("{} [{}({})]"), ex.what(), \
+                                               location.filename, location.line));          \
+        } else {                                                                            \
+            this->err_handler_(ex.what());                                                  \
+        }                                                                                   \
+    }                                                                                       \
+    catch (...) {                                                                           \
+        this->err_handler_("Rethrowing unknown exception in logger");                       \
+        throw;                                                                              \
     }
 #else
 #define SPDLOG_LOGGER_CATCH(location)
@@ -47,33 +47,34 @@
 
 namespace spdlog {
 
-class SPDLOG_API logger {
+template <class Alloc>
+class SPDLOG_API basic_logger {
 public:
     // Empty logger
-    explicit logger(std::string name)
+    explicit basic_logger(std::string name)
         : name_(std::move(name)),
           sinks_() {}
 
     // Logger with range on sinks
     template <typename It>
-    logger(std::string name, It begin, It end)
+    basic_logger(std::string name, It begin, It end)
         : name_(std::move(name)),
           sinks_(begin, end) {}
 
     // Logger with single sink
-    logger(std::string name, sink_ptr single_sink)
-        : logger(std::move(name), {std::move(single_sink)}) {}
+    basic_logger(std::string name, sink_ptr<Alloc> single_sink)
+        : basic_logger(std::move(name), {std::move(single_sink)}) {}
 
     // Logger with sinks init list
-    logger(std::string name, sinks_init_list sinks)
-        : logger(std::move(name), sinks.begin(), sinks.end()) {}
+    basic_logger(std::string name, sinks_init_list<Alloc> sinks)
+        : basic_logger(std::move(name), sinks.begin(), sinks.end()) {}
 
-    virtual ~logger() = default;
+    virtual ~basic_logger() = default;
 
-    logger(const logger &other);
-    logger(logger &&other) SPDLOG_NOEXCEPT;
-    logger &operator=(logger other) SPDLOG_NOEXCEPT;
-    void swap(spdlog::logger &other) SPDLOG_NOEXCEPT;
+    basic_logger(const basic_logger &other);
+    basic_logger(basic_logger &&other) SPDLOG_NOEXCEPT;
+    basic_logger &operator=(basic_logger other) SPDLOG_NOEXCEPT;
+    void swap(basic_logger &other) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc);
 
     template <typename... Args>
     void log(source_loc loc, level::level_enum lvl, format_string_t<Args...> fmt, Args &&...args) {
@@ -274,7 +275,7 @@ public:
 
     // set formatting for the sinks in this logger.
     // each sink will get a separate instance of the formatter object.
-    void set_formatter(std::unique_ptr<formatter> f);
+    void set_formatter(std::unique_ptr<basic_formatter<Alloc>> f);
 
     // set formatting for the sinks in this logger.
     // equivalent to
@@ -294,23 +295,23 @@ public:
     level::level_enum flush_level() const;
 
     // sinks
-    const std::vector<sink_ptr> &sinks() const;
+    const std::vector<sink_ptr<Alloc>> &sinks() const;
 
-    std::vector<sink_ptr> &sinks();
+    std::vector<sink_ptr<Alloc>> &sinks();
 
     // error handler
     void set_error_handler(err_handler);
 
     // create new logger with same sinks and configuration.
-    virtual std::shared_ptr<logger> clone(std::string logger_name);
+    virtual std::shared_ptr<basic_logger> clone(std::string logger_name);
 
 protected:
     std::string name_;
-    std::vector<sink_ptr> sinks_;
+    std::vector<sink_ptr<Alloc>> sinks_;
     spdlog::level_t level_{level::info};
     spdlog::level_t flush_level_{level::off};
     err_handler custom_err_handler_{nullptr};
-    details::backtracer tracer_;
+    details::backtracer<Alloc> tracer_;
 
     // common implementation for after templated public api has been resolved
     template <typename... Args>
@@ -321,7 +322,7 @@ protected:
             return;
         }
         SPDLOG_TRY {
-            memory_buf_t buf;
+            basic_memory_buf_t<Alloc> buf;
 #ifdef SPDLOG_USE_STD_FORMAT
             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(args...));
 #else
@@ -370,7 +371,10 @@ protected:
     void err_handler_(const std::string &msg) const;
 };
 
-void swap(logger &a, logger &b) noexcept;
+template <class Alloc>
+void swap(basic_logger<Alloc> &a, basic_logger<Alloc> &b) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc);
+
+using logger = basic_logger<default_allocator_t>;
 
 }  // namespace spdlog
 

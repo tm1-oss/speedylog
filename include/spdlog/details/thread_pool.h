@@ -14,19 +14,22 @@
 #include <vector>
 
 namespace spdlog {
-class async_logger;
+template <class Alloc>
+class basic_async_logger;
 
 namespace details {
 
-using async_logger_ptr = std::shared_ptr<spdlog::async_logger>;
+template <class Alloc>
+using async_logger_ptr = std::shared_ptr<spdlog::basic_async_logger<Alloc>>;
 
 enum class async_msg_type { log, flush, terminate };
 
 // Async msg to move to/from the queue
 // Movable only. should never be copied
-struct async_msg : log_msg_buffer {
+template <class Alloc = default_allocator_t>
+struct async_msg : log_msg_buffer<Alloc> {
     async_msg_type msg_type{async_msg_type::log};
-    async_logger_ptr worker_ptr;
+    async_logger_ptr<Alloc> worker_ptr;
 
     async_msg() = default;
     ~async_msg() = default;
@@ -53,13 +56,13 @@ struct async_msg : log_msg_buffer {
 #endif
 
     // construct from log_msg with given type
-    async_msg(async_logger_ptr &&worker, async_msg_type the_type, const details::log_msg &m)
-        : log_msg_buffer{m},
+    async_msg(async_logger_ptr<Alloc> &&worker, async_msg_type the_type, const details::log_msg &m)
+        : log_msg_buffer<Alloc>{m},
           msg_type{the_type},
           worker_ptr{std::move(worker)} {}
 
-    async_msg(async_logger_ptr &&worker, async_msg_type the_type)
-        : log_msg_buffer{},
+    async_msg(async_logger_ptr<Alloc> &&worker, async_msg_type the_type)
+        : log_msg_buffer<Alloc>{},
           msg_type{the_type},
           worker_ptr{std::move(worker)} {}
 
@@ -67,28 +70,29 @@ struct async_msg : log_msg_buffer {
         : async_msg{nullptr, the_type} {}
 };
 
-class SPDLOG_API thread_pool {
+template <class Alloc>
+class SPDLOG_API basic_thread_pool {
 public:
-    using item_type = async_msg;
+    using item_type = async_msg<Alloc>;
     using q_type = details::mpmc_blocking_queue<item_type>;
 
-    thread_pool(size_t q_max_items,
-                size_t threads_n,
-                std::function<void()> on_thread_start,
-                std::function<void()> on_thread_stop);
-    thread_pool(size_t q_max_items, size_t threads_n, std::function<void()> on_thread_start);
-    thread_pool(size_t q_max_items, size_t threads_n);
+    basic_thread_pool(size_t q_max_items,
+                      size_t threads_n,
+                      std::function<void()> on_thread_start,
+                      std::function<void()> on_thread_stop);
+    basic_thread_pool(size_t q_max_items, size_t threads_n, std::function<void()> on_thread_start);
+    basic_thread_pool(size_t q_max_items, size_t threads_n);
 
     // message all threads to terminate gracefully and join them
-    ~thread_pool();
+    ~basic_thread_pool();
 
-    thread_pool(const thread_pool &) = delete;
-    thread_pool &operator=(thread_pool &&) = delete;
+    basic_thread_pool(const basic_thread_pool &) = delete;
+    basic_thread_pool &operator=(basic_thread_pool &&) = delete;
 
-    void post_log(async_logger_ptr &&worker_ptr,
+    void post_log(async_logger_ptr<Alloc> &&worker_ptr,
                   const details::log_msg &msg,
                   async_overflow_policy overflow_policy);
-    void post_flush(async_logger_ptr &&worker_ptr, async_overflow_policy overflow_policy);
+    void post_flush(async_logger_ptr<Alloc> &&worker_ptr, async_overflow_policy overflow_policy);
     size_t overrun_counter();
     void reset_overrun_counter();
     size_t discard_counter();
@@ -100,7 +104,7 @@ private:
 
     std::vector<std::thread> threads_;
 
-    void post_async_msg_(async_msg &&new_msg, async_overflow_policy overflow_policy);
+    void post_async_msg_(async_msg<Alloc> &&new_msg, async_overflow_policy overflow_policy);
     void worker_loop_();
 
     // process next message in the queue
@@ -108,6 +112,8 @@ private:
     // was received)
     bool process_next_msg_();
 };
+
+using thread_pool = basic_thread_pool<default_allocator_t>;
 
 }  // namespace details
 }  // namespace spdlog

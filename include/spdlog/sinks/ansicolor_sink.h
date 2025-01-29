@@ -21,8 +21,8 @@ namespace sinks {
  * If no color terminal detected, omit the escape codes.
  */
 
-template <typename ConsoleMutex>
-class ansicolor_sink : public sink {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class ansicolor_sink : public sink<Alloc> {
 public:
     using mutex_t = typename ConsoleMutex::mutex_t;
     ansicolor_sink(FILE *target_file, color_mode mode);
@@ -41,7 +41,7 @@ public:
     void log(const details::log_msg &msg) override;
     void flush() override;
     void set_pattern(const std::string &pattern) override;
-    void set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) override;
+    void set_formatter(std::unique_ptr<spdlog::basic_formatter<Alloc>> sink_formatter) override;
 
     // Formatting codes
     const string_view_t reset = "\033[m";
@@ -84,22 +84,22 @@ protected:
 private:
     mutex_t &mutex_;
     bool should_do_colors_;
-    std::unique_ptr<spdlog::formatter> formatter_;
+    std::unique_ptr<spdlog::basic_formatter<Alloc>> formatter_;
     std::array<std::string, level::n_levels> colors_;
     void set_color_mode_(color_mode mode);
     void print_ccode_(const string_view_t &color_code) const;
-    void print_range_(const memory_buf_t &formatted, size_t start, size_t end) const;
+    void print_range_(const basic_memory_buf_t<Alloc> &formatted, size_t start, size_t end) const;
     static std::string to_string_(const string_view_t &sv);
 };
 
-template <typename ConsoleMutex>
-class ansicolor_stdout_sink : public ansicolor_sink<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class ansicolor_stdout_sink : public ansicolor_sink<ConsoleMutex, Alloc> {
 public:
     explicit ansicolor_stdout_sink(color_mode mode = color_mode::automatic);
 };
 
-template <typename ConsoleMutex>
-class ansicolor_stderr_sink : public ansicolor_sink<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class ansicolor_stderr_sink : public ansicolor_sink<ConsoleMutex, Alloc> {
 public:
     explicit ansicolor_stderr_sink(color_mode mode = color_mode::automatic);
 };

@@ -15,10 +15,11 @@
 
 namespace spdlog {
 namespace details {
+template <class Alloc>
 class SPDLOG_API backtracer {
     mutable std::mutex mutex_;
     std::atomic<bool> enabled_{false};
-    circular_q<log_msg_buffer> messages_;
+    circular_q<log_msg_buffer<Alloc>> messages_;
 
 public:
     backtracer() = default;

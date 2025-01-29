@@ -8,50 +8,62 @@
 #endif
 namespace spdlog {
 namespace details {
-SPDLOG_INLINE backtracer::backtracer(const backtracer &other) {
+template <class Alloc>
+SPDLOG_INLINE backtracer<Alloc>::backtracer(const backtracer &other) {
     std::lock_guard<std::mutex> lock(other.mutex_);
     enabled_ = other.enabled();
     messages_ = other.messages_;
 }
 
-SPDLOG_INLINE backtracer::backtracer(backtracer &&other) SPDLOG_NOEXCEPT {
+template <class Alloc>
+SPDLOG_INLINE backtracer<Alloc>::backtracer(backtracer &&other) SPDLOG_NOEXCEPT {
     std::lock_guard<std::mutex> lock(other.mutex_);
     enabled_ = other.enabled();
     messages_ = std::move(other.messages_);
 }
 
-SPDLOG_INLINE backtracer &backtracer::operator=(backtracer other) {
+template <class Alloc>
+SPDLOG_INLINE backtracer<Alloc> &backtracer<Alloc>::operator=(backtracer other) {
     std::lock_guard<std::mutex> lock(mutex_);
     enabled_ = other.enabled();
     messages_ = std::move(other.messages_);
     return *this;
 }
 
-SPDLOG_INLINE void backtracer::enable(size_t size) {
+template <class Alloc>
+SPDLOG_INLINE void backtracer<Alloc>::enable(size_t size) {
     std::lock_guard<std::mutex> lock{mutex_};
     enabled_.store(true, std::memory_order_relaxed);
-    messages_ = circular_q<log_msg_buffer>{size};
+    messages_ = circular_q<log_msg_buffer<Alloc>>{size};
 }
 
-SPDLOG_INLINE void backtracer::disable() {
+template <class Alloc>
+SPDLOG_INLINE void backtracer<Alloc>::disable() {
     std::lock_guard<std::mutex> lock{mutex_};
     enabled_.store(false, std::memory_order_relaxed);
 }
 
-SPDLOG_INLINE bool backtracer::enabled() const { return enabled_.load(std::memory_order_relaxed); }
-
-SPDLOG_INLINE void backtracer::push_back(const log_msg &msg) {
-    std::lock_guard<std::mutex> lock{mutex_};
-    messages_.push_back(log_msg_buffer{msg});
+template <class Alloc>
+SPDLOG_INLINE bool backtracer<Alloc>::enabled() const {
+    return enabled_.load(std::memory_order_relaxed);
 }
 
-SPDLOG_INLINE bool backtracer::empty() const {
+template <class Alloc>
+SPDLOG_INLINE void backtracer<Alloc>::push_back(const log_msg &msg) {
+    std::lock_guard<std::mutex> lock{mutex_};
+    messages_.push_back(log_msg_buffer<Alloc>{msg});
+}
+
+template <class Alloc>
+SPDLOG_INLINE bool backtracer<Alloc>::empty() const {
     std::lock_guard<std::mutex> lock{mutex_};
     return messages_.empty();
 }
 
 // pop all items in the q and apply the given fun on each of them.
-SPDLOG_INLINE void backtracer::foreach_pop(std::function<void(const details::log_msg &)> fun) {
+template <class Alloc>
+SPDLOG_INLINE void backtracer<Alloc>::foreach_pop(
+    std::function<void(const details::log_msg &)> fun) {
     std::lock_guard<std::mutex> lock{mutex_};
     while (!messages_.empty()) {
         auto &front_msg = messages_.front();
