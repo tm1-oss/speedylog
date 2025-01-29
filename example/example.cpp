@@ -331,7 +331,7 @@ public:
         dest.append(some_txt.data(), some_txt.data() + some_txt.size());
     }
 
-    std::unique_ptr<custom_flag_formatter> clone() const override {
+    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override {
         return spdlog::details::make_unique<my_formatter_flag>();
     }
 };

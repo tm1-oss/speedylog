@@ -8,10 +8,14 @@
 
 namespace spdlog {
 
-class formatter {
+template <class Alloc = default_allocator_t>
+class basic_formatter {
 public:
-    virtual ~formatter() = default;
-    virtual void format(const details::log_msg &msg, memory_buf_t &dest) = 0;
-    virtual std::unique_ptr<formatter> clone() const = 0;
+    virtual ~basic_formatter() = default;
+    virtual void format(const details::log_msg &msg, basic_memory_buf_t<Alloc> &dest) = 0;
+    virtual std::unique_ptr<basic_formatter> clone() const = 0;
 };
+
+using formatter = basic_formatter<default_allocator_t>;
+
 }  // namespace spdlog

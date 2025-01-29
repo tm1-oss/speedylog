@@ -36,8 +36,8 @@
 
 namespace spdlog {
 namespace sinks {
-template <typename Mutex>
-class dup_filter_sink : public dist_sink<Mutex> {
+template <typename Mutex, class Alloc = default_allocator_t>
+class dup_filter_sink : public dist_sink<Mutex, Alloc> {
 public:
     template <class Rep, class Period>
     explicit dup_filter_sink(std::chrono::duration<Rep, Period> max_skip_duration)
@@ -66,12 +66,12 @@ protected:
             if (msg_size > 0 && static_cast<size_t>(msg_size) < sizeof(buf)) {
                 details::log_msg skipped_msg{msg.source, msg.logger_name, skipped_msg_log_level_,
                                              string_view_t{buf, static_cast<size_t>(msg_size)}};
-                dist_sink<Mutex>::sink_it_(skipped_msg);
+                dist_sink<Mutex, Alloc>::sink_it_(skipped_msg);
             }
         }
 
         // log current message
-        dist_sink<Mutex>::sink_it_(msg);
+        dist_sink<Mutex, Alloc>::sink_it_(msg);
         last_msg_time_ = msg.time;
         skip_counter_ = 0;
         last_msg_payload_.assign(msg.payload.data(), msg.payload.data() + msg.payload.size());

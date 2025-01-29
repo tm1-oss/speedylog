@@ -20,8 +20,8 @@ namespace sinks {
  * Windows color console sink. Uses WriteConsoleA to write to the console with
  * colors
  */
-template <typename ConsoleMutex>
-class wincolor_sink : public sink {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class wincolor_sink : public sink<Alloc> {
 public:
     wincolor_sink(void *out_handle, color_mode mode);
     ~wincolor_sink() override;
@@ -34,7 +34,7 @@ public:
     void log(const details::log_msg &msg) override;
     void flush() override;
     void set_pattern(const std::string &pattern) override;
-    void set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) override;
+    void set_formatter(std::unique_ptr<spdlog::basic_formatter<Alloc>> sink_formatter) override;
     void set_color_mode(color_mode mode);
 
 protected:
@@ -42,29 +42,29 @@ protected:
     void *out_handle_;
     mutex_t &mutex_;
     bool should_do_colors_;
-    std::unique_ptr<spdlog::formatter> formatter_;
+    std::unique_ptr<spdlog::basic_formatter<Alloc>> formatter_;
     std::array<std::uint16_t, level::n_levels> colors_;
 
     // set foreground color and return the orig console attributes (for resetting later)
     std::uint16_t set_foreground_color_(std::uint16_t attribs);
 
     // print a range of formatted message to console
-    void print_range_(const memory_buf_t &formatted, size_t start, size_t end);
+    void print_range_(const basic_memory_buf_t<Alloc> &formatted, size_t start, size_t end);
 
     // in case we are redirected to file (not in console mode)
-    void write_to_file_(const memory_buf_t &formatted);
+    void write_to_file_(const basic_memory_buf_t<Alloc> &formatted);
 
     void set_color_mode_impl(color_mode mode);
 };
 
-template <typename ConsoleMutex>
-class wincolor_stdout_sink : public wincolor_sink<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class wincolor_stdout_sink : public wincolor_sink<ConsoleMutex, Alloc> {
 public:
     explicit wincolor_stdout_sink(color_mode mode = color_mode::automatic);
 };
 
-template <typename ConsoleMutex>
-class wincolor_stderr_sink : public wincolor_sink<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class wincolor_stderr_sink : public wincolor_sink<ConsoleMutex, Alloc> {
 public:
     explicit wincolor_stderr_sink(color_mode mode = color_mode::automatic);
 };

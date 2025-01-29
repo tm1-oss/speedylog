@@ -282,7 +282,7 @@ TEST_CASE("os::fwrite_bytes", "[os]") {
 TEST_CASE("log_msg_buffer self-assignment", "[log_msg_buffer]") {
     spdlog::details::log_msg msg(spdlog::source_loc{}, "my_logger", spdlog::level::info,
                                  "test message");
-    spdlog::details::log_msg_buffer buf(msg);
+    spdlog::details::log_msg_buffer<> buf(msg);
 
     REQUIRE(buf.logger_name == "my_logger");
     REQUIRE(buf.payload == "test message");

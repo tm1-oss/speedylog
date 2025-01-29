@@ -16,8 +16,8 @@ namespace sinks {
 /**
  * Sink that write to syslog using the `syscall()` library call.
  */
-template <typename Mutex>
-class syslog_sink : public base_sink<Mutex> {
+template <typename Mutex, class Alloc = default_allocator_t>
+class syslog_sink : public base_sink<Mutex, Alloc> {
 public:
     syslog_sink(std::string ident, int syslog_option, int syslog_facility, bool enable_formatting)
         : enable_formatting_{enable_formatting},
@@ -41,9 +41,9 @@ public:
 protected:
     void sink_it_(const details::log_msg &msg) override {
         string_view_t payload;
-        memory_buf_t formatted;
+        basic_memory_buf_t<Alloc> formatted;
         if (enable_formatting_) {
-            base_sink<Mutex>::formatter_->format(msg, formatted);
+            base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
             payload = string_view_t(formatted.data(), formatted.size());
         } else {
             payload = msg.payload;

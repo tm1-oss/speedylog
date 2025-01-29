@@ -37,6 +37,7 @@ struct padding_info {
     bool enabled_ = false;
 };
 
+template <class Alloc>
 class SPDLOG_API flag_formatter {
 public:
     explicit flag_formatter(padding_info padinfo)
@@ -45,7 +46,7 @@ public:
     virtual ~flag_formatter() = default;
     virtual void format(const details::log_msg &msg,
                         const std::tm &tm_time,
-                        memory_buf_t &dest) = 0;
+                        basic_memory_buf_t<Alloc> &dest) = 0;
 
 protected:
     padding_info padinfo_;
@@ -53,36 +54,38 @@ protected:
 
 }  // namespace details
 
-class SPDLOG_API custom_flag_formatter : public details::flag_formatter {
+template <class Alloc>
+class SPDLOG_API basic_custom_flag_formatter : public details::flag_formatter<Alloc> {
 public:
-    virtual std::unique_ptr<custom_flag_formatter> clone() const = 0;
+    virtual std::unique_ptr<basic_custom_flag_formatter> clone() const = 0;
 
     void set_padding_info(const details::padding_info &padding) {
-        flag_formatter::padinfo_ = padding;
+        details::flag_formatter<Alloc>::padinfo_ = padding;
     }
 };
 
-class SPDLOG_API pattern_formatter final : public formatter {
+template <class Alloc>
+class SPDLOG_API basic_pattern_formatter final : public basic_formatter<Alloc> {
 public:
-    using custom_flags = std::unordered_map<char, std::unique_ptr<custom_flag_formatter>>;
+    using custom_flags = std::unordered_map<char, std::unique_ptr<basic_custom_flag_formatter<Alloc>>>;
 
-    explicit pattern_formatter(std::string pattern,
-                               pattern_time_type time_type = pattern_time_type::local,
-                               std::string eol = spdlog::details::os::default_eol,
-                               custom_flags custom_user_flags = custom_flags());
+    explicit basic_pattern_formatter(std::string pattern,
+                                     pattern_time_type time_type = pattern_time_type::local,
+                                     std::string eol = spdlog::details::os::default_eol,
+                                     custom_flags custom_user_flags = custom_flags());
 
     // use default pattern is not given
-    explicit pattern_formatter(pattern_time_type time_type = pattern_time_type::local,
-                               std::string eol = spdlog::details::os::default_eol);
+    explicit basic_pattern_formatter(pattern_time_type time_type = pattern_time_type::local,
+                                     std::string eol = spdlog::details::os::default_eol);
 
-    pattern_formatter(const pattern_formatter &other) = delete;
-    pattern_formatter &operator=(const pattern_formatter &other) = delete;
+    basic_pattern_formatter(const basic_pattern_formatter &other) = delete;
+    basic_pattern_formatter &operator=(const basic_pattern_formatter &other) = delete;
 
-    std::unique_ptr<formatter> clone() const override;
-    void format(const details::log_msg &msg, memory_buf_t &dest) override;
+    std::unique_ptr<basic_formatter<Alloc>> clone() const override;
+    void format(const details::log_msg &msg, basic_memory_buf_t<Alloc> &dest) override;
 
     template <typename T, typename... Args>
-    pattern_formatter &add_flag(char flag, Args &&...args) {
+    basic_pattern_formatter &add_flag(char flag, Args &&...args) {
         custom_handlers_[flag] = details::make_unique<T>(std::forward<Args>(args)...);
         return *this;
     }
@@ -96,11 +99,11 @@ private:
     bool need_localtime_;
     std::tm cached_tm_;
     std::chrono::seconds last_log_secs_;
-    std::vector<std::unique_ptr<details::flag_formatter>> formatters_;
+    std::vector<std::unique_ptr<details::flag_formatter<Alloc>>> formatters_;
     custom_flags custom_handlers_;
 
     std::tm get_time_(const details::log_msg &msg);
-    template <typename Padder>
+    template <template <typename> class Padder>
     void handle_flag_(char flag, details::padding_info padding);
 
     // Extract given pad spec (e.g. %8X)
@@ -111,6 +114,10 @@ private:
 
     void compile_pattern_(const std::string &pattern);
 };
+
+using custom_flag_formatter = basic_custom_flag_formatter<default_allocator_t>;
+using pattern_formatter = basic_pattern_formatter<default_allocator_t>;
+
 }  // namespace spdlog
 
 #ifdef SPDLOG_HEADER_ONLY

@@ -9,6 +9,7 @@
 
 #include "benchmark/benchmark.h"
 
+#include "spdlog/details/null_mutex.h"
 #include "spdlog/spdlog.h"
 #include "spdlog/async.h"
 #include "spdlog/sinks/basic_file_sink.h"
@@ -208,8 +209,10 @@ int main(int argc, char *argv[]) {
         ->UseRealTime();
 
     auto async_logger_tracing = std::make_shared<spdlog::async_logger>(
-        "async_logger_tracing", std::make_shared<null_sink_mt>(), std::move(tp),
-        spdlog::async_overflow_policy::overrun_oldest);
+        "async_logger_tracing",
+        std::make_shared<
+            spdlog::sinks::null_sink<spdlog::details::null_mutex, std::allocator<char>>>(),
+        std::move(tp), spdlog::async_overflow_policy::overrun_oldest);
     async_logger_tracing->enable_backtrace(32);
     benchmark::RegisterBenchmark("async_logger/tracing", bench_logger, async_logger_tracing)
         ->Threads(n_threads)

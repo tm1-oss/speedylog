@@ -16,7 +16,8 @@
 namespace spdlog {
 
 // public methods
-SPDLOG_INLINE logger::logger(const logger &other)
+template <class Alloc>
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other)
     : name_(other.name_),
       sinks_(other.sinks_),
       level_(other.level_.load(std::memory_order_relaxed)),
@@ -24,7 +25,8 @@ SPDLOG_INLINE logger::logger(const logger &other)
       custom_err_handler_(other.custom_err_handler_),
       tracer_(other.tracer_) {}
 
-SPDLOG_INLINE logger::logger(logger &&other) SPDLOG_NOEXCEPT
+template <class Alloc>
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other) SPDLOG_NOEXCEPT
     : name_(std::move(other.name_)),
       sinks_(std::move(other.sinks_)),
       level_(other.level_.load(std::memory_order_relaxed)),
@@ -34,12 +36,15 @@ SPDLOG_INLINE logger::logger(logger &&other) SPDLOG_NOEXCEPT
 
 {}
 
-SPDLOG_INLINE logger &logger::operator=(logger other) SPDLOG_NOEXCEPT {
+template <class Alloc>
+SPDLOG_INLINE basic_logger<Alloc> &basic_logger<Alloc>::operator=(basic_logger other)
+    SPDLOG_NOEXCEPT {
     this->swap(other);
     return *this;
 }
 
-SPDLOG_INLINE void logger::swap(spdlog::logger &other) SPDLOG_NOEXCEPT {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::swap(basic_logger &other) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc) {
     name_.swap(other.name_);
     sinks_.swap(other.sinks_);
 
@@ -57,19 +62,30 @@ SPDLOG_INLINE void logger::swap(spdlog::logger &other) SPDLOG_NOEXCEPT {
     std::swap(tracer_, other.tracer_);
 }
 
-SPDLOG_INLINE void swap(logger &a, logger &b) noexcept { a.swap(b); }
+template <class Alloc>
+SPDLOG_INLINE void swap(basic_logger<Alloc> &a, basic_logger<Alloc> &b) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc) {
+    a.swap(b);
+}
 
-SPDLOG_INLINE void logger::set_level(level::level_enum log_level) { level_.store(log_level); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::set_level(level::level_enum log_level) {
+    level_.store(log_level);
+}
 
-SPDLOG_INLINE level::level_enum logger::level() const {
+template <class Alloc>
+SPDLOG_INLINE level::level_enum basic_logger<Alloc>::level() const {
     return static_cast<level::level_enum>(level_.load(std::memory_order_relaxed));
 }
 
-SPDLOG_INLINE const std::string &logger::name() const { return name_; }
+template <class Alloc>
+SPDLOG_INLINE const std::string &basic_logger<Alloc>::name() const {
+    return name_;
+}
 
 // set formatting for the sinks in this logger.
 // each sink will get a separate instance of the formatter object.
-SPDLOG_INLINE void logger::set_formatter(std::unique_ptr<formatter> f) {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::set_formatter(std::unique_ptr<basic_formatter<Alloc>> f) {
     for (auto it = sinks_.begin(); it != sinks_.end(); ++it) {
         if (std::next(it) == sinks_.end()) {
             // last element - we can be move it.
@@ -81,49 +97,78 @@ SPDLOG_INLINE void logger::set_formatter(std::unique_ptr<formatter> f) {
     }
 }
 
-SPDLOG_INLINE void logger::set_pattern(std::string pattern, pattern_time_type time_type) {
-    auto new_formatter = details::make_unique<pattern_formatter>(std::move(pattern), time_type);
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::set_pattern(std::string pattern,
+                                                    pattern_time_type time_type) {
+    auto new_formatter =
+        details::make_unique<basic_pattern_formatter<Alloc>>(std::move(pattern), time_type);
     set_formatter(std::move(new_formatter));
 }
 
 // create new backtrace sink and move to it all our child sinks
-SPDLOG_INLINE void logger::enable_backtrace(size_t n_messages) { tracer_.enable(n_messages); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::enable_backtrace(size_t n_messages) {
+    tracer_.enable(n_messages);
+}
 
 // restore orig sinks and level and delete the backtrace sink
-SPDLOG_INLINE void logger::disable_backtrace() { tracer_.disable(); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::disable_backtrace() {
+    tracer_.disable();
+}
 
-SPDLOG_INLINE void logger::dump_backtrace() { dump_backtrace_(); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::dump_backtrace() {
+    dump_backtrace_();
+}
 
 // flush functions
-SPDLOG_INLINE void logger::flush() { flush_(); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::flush() {
+    flush_();
+}
 
-SPDLOG_INLINE void logger::flush_on(level::level_enum log_level) { flush_level_.store(log_level); }
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::flush_on(level::level_enum log_level) {
+    flush_level_.store(log_level);
+}
 
-SPDLOG_INLINE level::level_enum logger::flush_level() const {
+template <class Alloc>
+SPDLOG_INLINE level::level_enum basic_logger<Alloc>::flush_level() const {
     return static_cast<level::level_enum>(flush_level_.load(std::memory_order_relaxed));
 }
 
 // sinks
-SPDLOG_INLINE const std::vector<sink_ptr> &logger::sinks() const { return sinks_; }
+template <class Alloc>
+SPDLOG_INLINE const std::vector<sink_ptr<Alloc>> &basic_logger<Alloc>::sinks() const {
+    return sinks_;
+}
 
-SPDLOG_INLINE std::vector<sink_ptr> &logger::sinks() { return sinks_; }
+template <class Alloc>
+SPDLOG_INLINE std::vector<sink_ptr<Alloc>> &basic_logger<Alloc>::sinks() {
+    return sinks_;
+}
 
 // error handler
-SPDLOG_INLINE void logger::set_error_handler(err_handler handler) {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::set_error_handler(err_handler handler) {
     custom_err_handler_ = std::move(handler);
 }
 
 // create new logger with same sinks and configuration.
-SPDLOG_INLINE std::shared_ptr<logger> logger::clone(std::string logger_name) {
-    auto cloned = std::make_shared<logger>(*this);
+template <class Alloc>
+SPDLOG_INLINE std::shared_ptr<basic_logger<Alloc>> basic_logger<Alloc>::clone(
+    std::string logger_name) {
+    auto cloned = std::make_shared<basic_logger>(*this);
     cloned->name_ = std::move(logger_name);
     return cloned;
 }
 
 // protected methods
-SPDLOG_INLINE void logger::log_it_(const spdlog::details::log_msg &log_msg,
-                                   bool log_enabled,
-                                   bool traceback_enabled) {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::log_it_(const spdlog::details::log_msg &log_msg,
+                                                bool log_enabled,
+                                                bool traceback_enabled) {
     if (log_enabled) {
         sink_it_(log_msg);
     }
@@ -132,7 +177,8 @@ SPDLOG_INLINE void logger::log_it_(const spdlog::details::log_msg &log_msg,
     }
 }
 
-SPDLOG_INLINE void logger::sink_it_(const details::log_msg &msg) {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::sink_it_(const details::log_msg &msg) {
     for (auto &sink : sinks_) {
         if (sink->should_log(msg.level)) {
             SPDLOG_TRY { sink->log(msg); }
@@ -145,14 +191,16 @@ SPDLOG_INLINE void logger::sink_it_(const details::log_msg &msg) {
     }
 }
 
-SPDLOG_INLINE void logger::flush_() {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::flush_() {
     for (auto &sink : sinks_) {
         SPDLOG_TRY { sink->flush(); }
         SPDLOG_LOGGER_CATCH(source_loc())
     }
 }
 
-SPDLOG_INLINE void logger::dump_backtrace_() {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::dump_backtrace_() {
     using details::log_msg;
     if (tracer_.enabled() && !tracer_.empty()) {
         sink_it_(
@@ -163,12 +211,14 @@ SPDLOG_INLINE void logger::dump_backtrace_() {
     }
 }
 
-SPDLOG_INLINE bool logger::should_flush_(const details::log_msg &msg) const {
+template <class Alloc>
+SPDLOG_INLINE bool basic_logger<Alloc>::should_flush_(const details::log_msg &msg) const {
     auto flush_level = flush_level_.load(std::memory_order_relaxed);
     return (msg.level >= flush_level) && (msg.level != level::off);
 }
 
-SPDLOG_INLINE void logger::err_handler_(const std::string &msg) const {
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::err_handler_(const std::string &msg) const {
     if (custom_err_handler_) {
         custom_err_handler_(msg);
     } else {
