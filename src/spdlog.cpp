@@ -21,8 +21,24 @@
 #include <mutex>
 
 // template instantiate logger constructor with sinks init list
-template SPDLOG_API spdlog::logger::logger(std::string name,
-                                           sinks_init_list::iterator begin,
-                                           sinks_init_list::iterator end);
-template class SPDLOG_API spdlog::sinks::base_sink<std::mutex>;
-template class SPDLOG_API spdlog::sinks::base_sink<spdlog::details::null_mutex>;
+template SPDLOG_API spdlog::basic_logger<spdlog::default_allocator_t>::basic_logger(
+    std::string name,
+    sinks_init_list<default_allocator_t>::iterator begin,
+    sinks_init_list<default_allocator_t>::iterator end);
+template class SPDLOG_API spdlog::sinks::base_sink<std::mutex, spdlog::default_allocator_t>;
+template class SPDLOG_API
+    spdlog::sinks::base_sink<spdlog::details::null_mutex, spdlog::default_allocator_t>;
+template class SPDLOG_API spdlog::details::log_msg_buffer<spdlog::default_allocator_t>;
+template SPDLOG_API void spdlog::swap<spdlog::default_allocator_t>(
+    spdlog::basic_logger<spdlog::default_allocator_t> &,
+    spdlog::basic_logger<spdlog::default_allocator_t> &);
+
+// These classes are all implicitly instantiated by the registry<Alloc> constructor.
+// The lines below are kept without SPDLOG_API to force emission of all method bodies into this TU;
+// the visibility("default") from SPDLOG_API on each class definition in the header is sufficient
+// to export them from the shared library.
+template class spdlog::sinks::sink<spdlog::default_allocator_t>;
+template class spdlog::details::registry<spdlog::default_allocator_t>;
+template class spdlog::basic_pattern_formatter<spdlog::default_allocator_t>;
+template class spdlog::basic_logger<spdlog::default_allocator_t>;
+template class spdlog::details::backtracer<spdlog::default_allocator_t>;

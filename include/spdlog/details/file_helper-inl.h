@@ -95,7 +95,7 @@ SPDLOG_INLINE void file_helper::close() {
     }
 }
 
-SPDLOG_INLINE void file_helper::write(const memory_buf_t &buf) {
+SPDLOG_INLINE void file_helper::write(const string_view_t buf) {
     if (fd_ == nullptr) return;
     size_t msg_size = buf.size();
     auto data = buf.data();

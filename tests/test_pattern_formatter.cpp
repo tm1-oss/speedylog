@@ -382,7 +382,7 @@ public:
 
     std::string some_txt;
 
-    std::unique_ptr<custom_flag_formatter> clone() const override {
+    std::unique_ptr<spdlog::custom_flag_formatter> clone() const override {
         return spdlog::details::make_unique<custom_test_flag>(some_txt);
     }
 };

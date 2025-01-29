@@ -31,7 +31,8 @@ using namespace spdlog;
 using namespace spdlog::sinks;
 using namespace utils;
 
-void bench_mt(int howmany, std::shared_ptr<spdlog::logger> log, int thread_count);
+template <class Alloc>
+void bench_mt(int howmany, std::shared_ptr<spdlog::basic_logger<Alloc>> log, int thread_count);
 
 #ifdef _MSC_VER
 #pragma warning(push)
@@ -90,7 +91,7 @@ int main(int argc, char *argv[]) {
 
         if (argc > 4) iters = atoi(argv[4]);
 
-        auto slot_size = sizeof(spdlog::details::async_msg);
+        auto slot_size = sizeof(spdlog::details::async_msg<default_allocator_t>);
         spdlog::info("-------------------------------------------------");
         spdlog::info("Messages     : {:L}", howmany);
         spdlog::info("Threads      : {:L}", threads);
@@ -108,9 +109,12 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < iters; i++) {
             auto tp = std::make_shared<details::thread_pool>(queue_size, 1);
             auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
-            auto logger = std::make_shared<async_logger>(
-                "async_logger", std::move(file_sink), std::move(tp), async_overflow_policy::block);
-            bench_mt(howmany, std::move(logger), threads);
+            auto file_sink_2 =
+                std::static_pointer_cast<spdlog::sinks::sink<default_allocator_t>>(file_sink);
+            auto logger = std::make_shared<basic_async_logger<default_allocator_t>>(
+                "async_logger", std::move(file_sink_2), std::move(tp),
+                async_overflow_policy::block);
+            bench_mt<default_allocator_t>(howmany, std::move(logger), threads);
             // verify_file(filename, howmany);
         }
 
@@ -123,10 +127,10 @@ int main(int argc, char *argv[]) {
         for (int i = 0; i < iters; i++) {
             auto tp = std::make_shared<details::thread_pool>(queue_size, 1);
             auto file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(filename, true);
-            auto logger =
-                std::make_shared<async_logger>("async_logger", std::move(file_sink), std::move(tp),
-                                               async_overflow_policy::overrun_oldest);
-            bench_mt(howmany, std::move(logger), threads);
+            auto logger = std::make_shared<basic_async_logger<default_allocator_t>>(
+                "async_logger", std::move(file_sink), std::move(tp),
+                async_overflow_policy::overrun_oldest);
+            bench_mt<default_allocator_t>(howmany, std::move(logger), threads);
         }
         spdlog::shutdown();
     } catch (std::exception &ex) {
@@ -143,7 +147,8 @@ void thread_fun(std::shared_ptr<spdlog::logger> logger, int howmany) {
     }
 }
 
-void bench_mt(int howmany, std::shared_ptr<spdlog::logger> logger, int thread_count) {
+template <class Alloc>
+void bench_mt(int howmany, std::shared_ptr<spdlog::basic_logger<Alloc>> logger, int thread_count) {
     using std::chrono::high_resolution_clock;
     vector<std::thread> threads;
     auto start = high_resolution_clock::now();

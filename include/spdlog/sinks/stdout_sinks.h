@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdio>
+#include <memory>
 #include <spdlog/details/console_globals.h>
 #include <spdlog/details/synchronous_factory.h>
 #include <spdlog/sinks/sink.h>
@@ -16,8 +17,8 @@ namespace spdlog {
 
 namespace sinks {
 
-template <typename ConsoleMutex>
-class stdout_sink_base : public sink {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class stdout_sink_base : public sink<Alloc> {
 public:
     using mutex_t = typename ConsoleMutex::mutex_t;
     explicit stdout_sink_base(FILE *file);
@@ -33,25 +34,25 @@ public:
     void flush() override;
     void set_pattern(const std::string &pattern) override;
 
-    void set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) override;
+    void set_formatter(std::unique_ptr<spdlog::basic_formatter<Alloc>> sink_formatter) override;
 
 protected:
     mutex_t &mutex_;
     FILE *file_;
-    std::unique_ptr<spdlog::formatter> formatter_;
+    std::unique_ptr<spdlog::basic_formatter<Alloc>> formatter_;
 #ifdef _WIN32
     HANDLE handle_;
 #endif  // WIN32
 };
 
-template <typename ConsoleMutex>
-class stdout_sink : public stdout_sink_base<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class stdout_sink : public stdout_sink_base<ConsoleMutex, Alloc> {
 public:
     stdout_sink();
 };
 
-template <typename ConsoleMutex>
-class stderr_sink : public stdout_sink_base<ConsoleMutex> {
+template <typename ConsoleMutex, class Alloc = default_allocator_t>
+class stderr_sink : public stdout_sink_base<ConsoleMutex, Alloc> {
 public:
     stderr_sink();
 };

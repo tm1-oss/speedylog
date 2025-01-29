@@ -9,7 +9,7 @@
 #define SIMPLE_LOG "test_logs/simple_log.txt"
 #define SIMPLE_ASYNC_LOG "test_logs/simple_async_log.txt"
 
-class failing_sink : public spdlog::sinks::base_sink<std::mutex> {
+class failing_sink : public spdlog::sinks::base_sink<std::mutex, std::allocator<char>> {
 protected:
     void sink_it_(const spdlog::details::log_msg &) final {
         throw std::runtime_error("some error happened during log");

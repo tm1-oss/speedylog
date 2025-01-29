@@ -52,7 +52,8 @@ SPDLOG_API void initialize_logger(std::shared_ptr<logger> logger);
 SPDLOG_API std::shared_ptr<logger> get(const std::string &name);
 
 // Set global formatter. Each sink in each logger will get a clone of this object
-SPDLOG_API void set_formatter(std::unique_ptr<spdlog::formatter> formatter);
+SPDLOG_API void set_formatter(
+    std::unique_ptr<spdlog::basic_formatter<default_allocator_t>> formatter);
 
 // Set global format string.
 // example: spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %l : %v");
@@ -84,7 +85,7 @@ SPDLOG_API void flush_on(level::level_enum log_level);
 // Warning: Use only if all your loggers are thread safe!
 template <typename Rep, typename Period>
 inline void flush_every(std::chrono::duration<Rep, Period> interval) {
-    details::registry::instance().flush_every(interval);
+    details::registry<>::instance().flush_every(interval);
 }
 
 // Set global error handler

@@ -8,6 +8,7 @@
 #include <spdlog/details/synchronous_factory.h>
 #include <spdlog/sinks/base_sink.h>
 
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -16,8 +17,8 @@ namespace sinks {
 /*
  * Trivial file sink with single file as target
  */
-template <typename Mutex>
-class basic_file_sink final : public base_sink<Mutex> {
+template <typename Mutex, class Alloc = default_allocator_t>
+class basic_file_sink final : public base_sink<Mutex, Alloc> {
 public:
     explicit basic_file_sink(const filename_t &filename,
                              bool truncate = false,
