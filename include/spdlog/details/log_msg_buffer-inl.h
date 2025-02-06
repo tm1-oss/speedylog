@@ -11,8 +11,13 @@ namespace spdlog {
 namespace details {
 
 template <class Alloc>
-SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(const log_msg &orig_msg)
-    : log_msg{orig_msg} {
+SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(Alloc alloc)
+    : buffer(alloc) {}
+
+template <class Alloc>
+SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(const log_msg &orig_msg, Alloc alloc)
+    : log_msg{orig_msg},
+      buffer(alloc) {
     buffer.append(logger_name.begin(), logger_name.end());
     buffer.append(payload.begin(), payload.end());
     update_string_views();
@@ -20,7 +25,18 @@ SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(const log_msg &orig_msg)
 
 template <class Alloc>
 SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(const log_msg_buffer &other)
-    : log_msg{other} {
+    : log_msg{other},
+      buffer(std::allocator_traits<Alloc>::select_on_container_copy_construction(
+          other.buffer.get_allocator())) {
+    buffer.append(logger_name.begin(), logger_name.end());
+    buffer.append(payload.begin(), payload.end());
+    update_string_views();
+}
+
+template <class Alloc>
+SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(const log_msg_buffer &other, Alloc alloc)
+    : log_msg{other},
+      buffer(alloc) {
     buffer.append(logger_name.begin(), logger_name.end());
     buffer.append(payload.begin(), payload.end());
     update_string_views();
@@ -30,6 +46,19 @@ template <class Alloc>
 SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(log_msg_buffer &&other) SPDLOG_NOEXCEPT
     : log_msg{other},
       buffer{std::move(other.buffer)} {
+    update_string_views();
+}
+
+template <class Alloc>
+SPDLOG_INLINE log_msg_buffer<Alloc>::log_msg_buffer(log_msg_buffer &&other,
+                                                    Alloc alloc) SPDLOG_NOEXCEPT : log_msg{other},
+                                                                                   buffer{alloc} {
+    if (alloc == other.buffer.get_allocator()) {
+        buffer = std::move(other.buffer);
+    } else {
+        buffer.append(logger_name.begin(), logger_name.end());
+        buffer.append(payload.begin(), payload.end());
+    }
     update_string_views();
 }
 

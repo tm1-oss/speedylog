@@ -48,32 +48,37 @@
 namespace spdlog {
 
 template <class Alloc>
-class SPDLOG_API basic_logger {
+class SPDLOG_API basic_logger : private Alloc {
 public:
     // Empty logger
-    explicit basic_logger(std::string name)
-        : name_(std::move(name)),
+    explicit basic_logger(std::string name, Alloc alloc = Alloc())
+        : Alloc(alloc),
+          name_(std::move(name)),
           sinks_() {}
 
     // Logger with range on sinks
     template <typename It>
-    basic_logger(std::string name, It begin, It end)
-        : name_(std::move(name)),
+    basic_logger(std::string name, It begin, It end, Alloc alloc = Alloc())
+        : Alloc(alloc),
+          name_(std::move(name)),
           sinks_(begin, end) {}
 
     // Logger with single sink
-    basic_logger(std::string name, sink_ptr<Alloc> single_sink)
-        : basic_logger(std::move(name), {std::move(single_sink)}) {}
+    basic_logger(std::string name, sink_ptr<Alloc> single_sink, Alloc alloc = Alloc())
+        : basic_logger(std::move(name), {std::move(single_sink)}, alloc) {}
 
     // Logger with sinks init list
-    basic_logger(std::string name, sinks_init_list<Alloc> sinks)
-        : basic_logger(std::move(name), sinks.begin(), sinks.end()) {}
+    basic_logger(std::string name, sinks_init_list<Alloc> sinks, Alloc alloc = Alloc())
+        : basic_logger(std::move(name), sinks.begin(), sinks.end(), alloc) {}
 
     virtual ~basic_logger() = default;
 
     basic_logger(const basic_logger &other);
+    basic_logger(const basic_logger &other, Alloc alloc);
     basic_logger(basic_logger &&other) SPDLOG_NOEXCEPT;
-    basic_logger &operator=(basic_logger other) SPDLOG_NOEXCEPT;
+    basic_logger(basic_logger &&other, Alloc alloc) SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc);
+    basic_logger &operator=(const basic_logger &other);
+    basic_logger &operator=(basic_logger &&other) SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Alloc);
     void swap(basic_logger &other) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc);
 
     template <typename... Args>
@@ -322,7 +327,7 @@ protected:
             return;
         }
         SPDLOG_TRY {
-            basic_memory_buf_t<Alloc> buf;
+            basic_memory_buf_t<Alloc> buf(*this);
 #ifdef SPDLOG_USE_STD_FORMAT
             fmt_lib::vformat_to(std::back_inserter(buf), fmt, fmt_lib::make_format_args(args...));
 #else

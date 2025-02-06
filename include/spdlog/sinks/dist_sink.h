@@ -22,9 +22,13 @@ namespace sinks {
 template <typename Mutex, class Alloc>
 class dist_sink : public base_sink<Mutex, Alloc> {
 public:
-    dist_sink() = default;
-    explicit dist_sink(std::vector<std::shared_ptr<sink<Alloc>>> sinks)
-        : sinks_(sinks) {}
+    using allocator_type = Alloc;
+
+    explicit dist_sink(Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc) {}
+    explicit dist_sink(std::vector<std::shared_ptr<sink<Alloc>>> sinks, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          sinks_(sinks) {}
 
     dist_sink(const dist_sink &) = delete;
     dist_sink &operator=(const dist_sink &) = delete;

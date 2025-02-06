@@ -11,8 +11,13 @@ namespace spdlog {
 
 namespace sinks {
 template <class Alloc = default_allocator_t>
-class SPDLOG_API sink {
+class SPDLOG_API sink : private Alloc {
 public:
+    sink(const sink &other) = delete;
+    sink(sink &&other) SPDLOG_NOEXCEPT = delete;
+    sink &operator=(const sink &other) = delete;
+    sink &operator=(sink &&other) SPDLOG_NOEXCEPT = delete;
+
     virtual ~sink() = default;
     virtual void log(const details::log_msg &msg) = 0;
     virtual void flush() = 0;
@@ -22,8 +27,11 @@ public:
     void set_level(level::level_enum log_level);
     level::level_enum level() const;
     bool should_log(level::level_enum msg_level) const;
+    Alloc get_allocator() const;
 
 protected:
+    explicit sink(Alloc alloc);
+
     // sink log level - default is all
     level_t level_{level::trace};
 };

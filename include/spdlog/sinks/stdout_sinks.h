@@ -21,7 +21,9 @@ template <typename ConsoleMutex, class Alloc = default_allocator_t>
 class stdout_sink_base : public sink<Alloc> {
 public:
     using mutex_t = typename ConsoleMutex::mutex_t;
-    explicit stdout_sink_base(FILE *file);
+    using allocator_type = Alloc;
+
+    explicit stdout_sink_base(FILE *file, Alloc alloc = Alloc());
     ~stdout_sink_base() override = default;
 
     stdout_sink_base(const stdout_sink_base &other) = delete;

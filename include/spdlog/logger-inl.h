@@ -12,13 +12,25 @@
 #include <spdlog/sinks/sink.h>
 
 #include <cstdio>
+#include <cassert>
 
 namespace spdlog {
 
 // public methods
 template <class Alloc>
 SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other)
-    : name_(other.name_),
+    : Alloc(std::allocator_traits<Alloc>::select_on_container_copy_construction(other)),
+      name_(other.name_),
+      sinks_(other.sinks_),
+      level_(other.level_.load(std::memory_order_relaxed)),
+      flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
+      custom_err_handler_(other.custom_err_handler_),
+      tracer_(other.tracer_) {}
+
+template <class Alloc>
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other, Alloc alloc)
+    : Alloc(alloc),
+      name_(other.name_),
       sinks_(other.sinks_),
       level_(other.level_.load(std::memory_order_relaxed)),
       flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
@@ -27,24 +39,73 @@ SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other)
 
 template <class Alloc>
 SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other) SPDLOG_NOEXCEPT
-    : name_(std::move(other.name_)),
+    : Alloc(std::move(other)),
+      name_(std::move(other.name_)),
       sinks_(std::move(other.sinks_)),
       level_(other.level_.load(std::memory_order_relaxed)),
       flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
       custom_err_handler_(std::move(other.custom_err_handler_)),
-      tracer_(std::move(other.tracer_))
-
-{}
+      tracer_(std::move(other.tracer_)) {}
 
 template <class Alloc>
-SPDLOG_INLINE basic_logger<Alloc> &basic_logger<Alloc>::operator=(basic_logger other)
-    SPDLOG_NOEXCEPT {
-    this->swap(other);
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other, Alloc alloc) SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc)
+    : Alloc(alloc),
+      name_(std::move(other.name_)),
+      sinks_(std::move(other.sinks_)),
+      level_(other.level_.load(std::memory_order_relaxed)),
+      flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
+      custom_err_handler_(std::move(other.custom_err_handler_)),
+      tracer_(std::move(other.tracer_)) {}
+
+template <class Alloc>
+SPDLOG_INLINE basic_logger<Alloc> &basic_logger<Alloc>::operator=(const basic_logger &other) {
+    if (this == &other) return *this;
+    // Propagate the allocator when the trait demands it
+    SPDLOG_IF_CONSTEXPR(
+        std::allocator_traits<Alloc>::propagate_on_container_copy_assignment::value) {
+        static_cast<Alloc &>(*this) = static_cast<const Alloc &>(other);
+    }
+    name_ = other.name_;
+    sinks_ = other.sinks_;
+    level_.store(other.level_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    flush_level_.store(other.flush_level_.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+    custom_err_handler_ = other.custom_err_handler_;
+    tracer_ = other.tracer_;
     return *this;
 }
 
 template <class Alloc>
-SPDLOG_INLINE void basic_logger<Alloc>::swap(basic_logger &other) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc) {
+SPDLOG_INLINE basic_logger<Alloc> &basic_logger<Alloc>::operator=(basic_logger &&other)
+    SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Alloc) {
+    if (this == &other) return *this;
+    // propagate the allocator when the trait demands it
+    SPDLOG_IF_CONSTEXPR(
+        std::allocator_traits<Alloc>::propagate_on_container_move_assignment::value) {
+        static_cast<Alloc &>(*this) = std::move(static_cast<Alloc &>(other));
+    }
+    name_ = std::move(other.name_);
+    sinks_ = std::move(other.sinks_);
+    level_.store(other.level_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    flush_level_.store(other.flush_level_.load(std::memory_order_relaxed),
+                       std::memory_order_relaxed);
+    custom_err_handler_ = std::move(other.custom_err_handler_);
+    tracer_ = std::move(other.tracer_);
+    return *this;
+}
+
+template <class Alloc>
+SPDLOG_INLINE void basic_logger<Alloc>::swap(basic_logger &other)
+    SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc) {
+    if (this == &other) return;
+    SPDLOG_IF_CONSTEXPR(std::allocator_traits<Alloc>::propagate_on_container_swap::value) {
+        std::swap(static_cast<Alloc &>(*this), static_cast<Alloc &>(other));
+    }
+    else {
+        // swapping with nonequal allocator is UB per [container.reqmts-65]
+        assert(static_cast<Alloc &>(*this) == static_cast<Alloc &>(other));
+    }
+
     name_.swap(other.name_);
     sinks_.swap(other.sinks_);
 

@@ -39,9 +39,13 @@ namespace sinks {
 template <typename Mutex, class Alloc = default_allocator_t>
 class dup_filter_sink : public dist_sink<Mutex, Alloc> {
 public:
+    using allocator_type = Alloc;
+
     template <class Rep, class Period>
-    explicit dup_filter_sink(std::chrono::duration<Rep, Period> max_skip_duration)
-        : max_skip_duration_{max_skip_duration} {}
+    explicit dup_filter_sink(std::chrono::duration<Rep, Period> max_skip_duration,
+                             Alloc alloc = Alloc())
+        : dist_sink<Mutex, Alloc>(alloc),
+          max_skip_duration_{max_skip_duration} {}
 
 protected:
     std::chrono::microseconds max_skip_duration_;

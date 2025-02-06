@@ -20,9 +20,14 @@ namespace sinks {
 template <typename Mutex, class Alloc = default_allocator_t>
 class basic_file_sink final : public base_sink<Mutex, Alloc> {
 public:
+    using allocator_type = Alloc;
+
     explicit basic_file_sink(const filename_t &filename,
-                             bool truncate = false,
-                             const file_event_handlers &event_handlers = {});
+                             bool truncate,
+                             const file_event_handlers &event_handlers,
+                             Alloc alloc = Alloc());
+    explicit basic_file_sink(const filename_t &filename, bool truncate, Alloc alloc = Alloc());
+    explicit basic_file_sink(const filename_t &filename, Alloc alloc = Alloc());
     const filename_t &filename() const;
     void truncate();
 

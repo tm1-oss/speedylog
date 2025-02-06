@@ -19,8 +19,15 @@ namespace sinks {
 template <typename Mutex, class Alloc = default_allocator_t>
 class syslog_sink : public base_sink<Mutex, Alloc> {
 public:
-    syslog_sink(std::string ident, int syslog_option, int syslog_facility, bool enable_formatting)
-        : enable_formatting_{enable_formatting},
+    using allocator_type = Alloc;
+
+    syslog_sink(std::string ident,
+                int syslog_option,
+                int syslog_facility,
+                bool enable_formatting,
+                Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          enable_formatting_{enable_formatting},
           syslog_levels_{{/* spdlog::level::trace      */ LOG_DEBUG,
                           /* spdlog::level::debug      */ LOG_DEBUG,
                           /* spdlog::level::info       */ LOG_INFO,
@@ -41,7 +48,7 @@ public:
 protected:
     void sink_it_(const details::log_msg &msg) override {
         string_view_t payload;
-        basic_memory_buf_t<Alloc> formatted;
+        basic_memory_buf_t<Alloc> formatted(this->get_allocator());
         if (enable_formatting_) {
             base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
             payload = string_view_t(formatted.data(), formatted.size());

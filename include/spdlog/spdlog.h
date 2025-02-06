@@ -30,10 +30,21 @@ using default_factory = synchronous_factory;
 //
 // Example:
 //   spdlog::create<daily_file_sink_st>("logger_name", "dailylog_filename", 11, 59);
-template <typename Sink, typename... SinkArgs>
+template <
+    typename Sink,
+    typename... SinkArgs,
+    typename std::enable_if<!std::uses_allocator<Sink, default_allocator_t>::value, int>::type = 0>
 inline std::shared_ptr<spdlog::logger> create(std::string logger_name, SinkArgs &&...sink_args) {
     return default_factory::create<Sink>(std::move(logger_name),
                                          std::forward<SinkArgs>(sink_args)...);
+}
+template <
+    typename Sink,
+    typename... SinkArgs,
+    typename std::enable_if<std::uses_allocator<Sink, default_allocator_t>::value, int>::type = 0>
+inline std::shared_ptr<spdlog::logger> create(std::string logger_name, SinkArgs &&...sink_args) {
+    return default_factory::create<Sink>(
+        std::move(logger_name), std::forward<SinkArgs>(sink_args)..., default_allocator_t());
 }
 
 // Initialize and register a logger,

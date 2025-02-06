@@ -14,11 +14,17 @@ namespace spdlog {
 namespace details {
 
 template <class Alloc>
+SPDLOG_INLINE async_msg<Alloc>::async_msg(Alloc alloc)
+    : log_msg_buffer<Alloc>(alloc) {}
+
+template <class Alloc>
 SPDLOG_INLINE basic_thread_pool<Alloc>::basic_thread_pool(size_t q_max_items,
                                                           size_t threads_n,
                                                           std::function<void()> on_thread_start,
-                                                          std::function<void()> on_thread_stop)
-    : q_(q_max_items) {
+                                                          std::function<void()> on_thread_stop,
+                                                          Alloc alloc)
+    : Alloc(alloc),
+      q_(q_max_items) {
     if (threads_n == 0 || threads_n > 1000) {
         throw_spdlog_ex(
             "spdlog::basic_thread_pool(): invalid threads_n param (valid "
@@ -36,12 +42,15 @@ SPDLOG_INLINE basic_thread_pool<Alloc>::basic_thread_pool(size_t q_max_items,
 template <class Alloc>
 SPDLOG_INLINE basic_thread_pool<Alloc>::basic_thread_pool(size_t q_max_items,
                                                           size_t threads_n,
-                                                          std::function<void()> on_thread_start)
-    : basic_thread_pool(q_max_items, threads_n, on_thread_start, [] {}) {}
+                                                          std::function<void()> on_thread_start,
+                                                          Alloc alloc)
+    : basic_thread_pool(q_max_items, threads_n, on_thread_start, [] {}, alloc) {}
 
 template <class Alloc>
-SPDLOG_INLINE basic_thread_pool<Alloc>::basic_thread_pool(size_t q_max_items, size_t threads_n)
-    : basic_thread_pool(q_max_items, threads_n, [] {}, [] {}) {}
+SPDLOG_INLINE basic_thread_pool<Alloc>::basic_thread_pool(size_t q_max_items,
+                                                          size_t threads_n,
+                                                          Alloc alloc)
+    : basic_thread_pool(q_max_items, threads_n, [] {}, alloc) {}
 
 // message all threads to terminate gracefully join them
 template <class Alloc>
@@ -122,7 +131,7 @@ void SPDLOG_INLINE basic_thread_pool<Alloc>::worker_loop_() {
 // returns true if this thread should still be active (while no terminated msg was received)
 template <class Alloc>
 bool SPDLOG_INLINE basic_thread_pool<Alloc>::process_next_msg_() {
-    async_msg<Alloc> incoming_async_msg;
+    async_msg<Alloc> incoming_async_msg(*this);
     q_.dequeue(incoming_async_msg);
 
     switch (incoming_async_msg.msg_type) {

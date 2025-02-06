@@ -16,8 +16,11 @@
 namespace spdlog {
 namespace sinks {
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::wincolor_sink(void *out_handle, color_mode mode)
-    : out_handle_(out_handle),
+SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::wincolor_sink(void *out_handle,
+                                                                color_mode mode,
+                                                                Alloc alloc)
+    : sink<Alloc>(alloc),
+      out_handle_(out_handle),
       mutex_(ConsoleMutex::mutex()),
       formatter_(details::make_unique<spdlog::basic_pattern_formatter<Alloc>>()) {
     set_color_mode_impl(mode);
@@ -163,12 +166,24 @@ wincolor_sink<ConsoleMutex, Alloc>::write_to_file_(const memory_buf_t &formatted
 
 // wincolor_stdout_sink
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex, Alloc>::wincolor_stdout_sink(color_mode mode)
-    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_OUTPUT_HANDLE), mode) {}
+SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex, Alloc>::wincolor_stdout_sink(color_mode mode,
+                                                                              Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_OUTPUT_HANDLE), mode, alloc) {}
+
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex, Alloc>::wincolor_stdout_sink(Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(
+          ::GetStdHandle(STD_OUTPUT_HANDLE), color_mode::automatic, alloc) {}
 
 // wincolor_stderr_sink
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex, Alloc>::wincolor_stderr_sink(color_mode mode)
-    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_ERROR_HANDLE), mode) {}
+SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex, Alloc>::wincolor_stderr_sink(color_mode mode,
+                                                                              Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_ERROR_HANDLE), mode, alloc) {}
+
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex, Alloc>::wincolor_stderr_sink(Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(
+          ::GetStdHandle(STD_ERROR_HANDLE), color_mode::automatic, alloc) {}
 }  // namespace sinks
 }  // namespace spdlog

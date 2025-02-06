@@ -31,7 +31,7 @@ struct async_msg : log_msg_buffer<Alloc> {
     async_msg_type msg_type{async_msg_type::log};
     async_logger_ptr<Alloc> worker_ptr;
 
-    async_msg() = default;
+    async_msg(Alloc alloc = Alloc());
     ~async_msg() = default;
 
     // should only be moved in or out of the queue..
@@ -71,17 +71,22 @@ struct async_msg : log_msg_buffer<Alloc> {
 };
 
 template <class Alloc>
-class SPDLOG_API basic_thread_pool {
+class SPDLOG_API basic_thread_pool : private Alloc {
 public:
     using item_type = async_msg<Alloc>;
     using q_type = details::mpmc_blocking_queue<item_type>;
+    using allocator_type = Alloc;
 
     basic_thread_pool(size_t q_max_items,
                       size_t threads_n,
                       std::function<void()> on_thread_start,
-                      std::function<void()> on_thread_stop);
-    basic_thread_pool(size_t q_max_items, size_t threads_n, std::function<void()> on_thread_start);
-    basic_thread_pool(size_t q_max_items, size_t threads_n);
+                      std::function<void()> on_thread_stop,
+                      Alloc alloc = Alloc());
+    basic_thread_pool(size_t q_max_items,
+                      size_t threads_n,
+                      std::function<void()> on_thread_start,
+                      Alloc alloc = Alloc());
+    basic_thread_pool(size_t q_max_items, size_t threads_n, Alloc alloc = Alloc());
 
     // message all threads to terminate gracefully and join them
     ~basic_thread_pool();
