@@ -10,6 +10,10 @@
 #include <spdlog/common.h>
 
 template <class Alloc>
+SPDLOG_INLINE spdlog::sinks::sink<Alloc>::sink(Alloc alloc)
+    : Alloc(alloc) {}
+
+template <class Alloc>
 SPDLOG_INLINE bool spdlog::sinks::sink<Alloc>::should_log(
     spdlog::level::level_enum msg_level) const {
     return msg_level >= level_.load(std::memory_order_relaxed);
@@ -23,4 +27,9 @@ SPDLOG_INLINE void spdlog::sinks::sink<Alloc>::set_level(level::level_enum log_l
 template <class Alloc>
 SPDLOG_INLINE spdlog::level::level_enum spdlog::sinks::sink<Alloc>::level() const {
     return static_cast<spdlog::level::level_enum>(level_.load(std::memory_order_relaxed));
+}
+
+template <class Alloc>
+SPDLOG_INLINE Alloc spdlog::sinks::sink<Alloc>::get_allocator() const {
+    return *this;
 }

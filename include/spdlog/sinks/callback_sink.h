@@ -22,8 +22,11 @@ namespace sinks {
 template <typename Mutex, class Alloc = default_allocator_t>
 class callback_sink final : public base_sink<Mutex, Alloc> {
 public:
-    explicit callback_sink(const custom_log_callback &callback)
-        : callback_{callback} {}
+    using allocator_type = Alloc;
+
+    explicit callback_sink(const custom_log_callback &callback, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          callback_{callback} {}
 
 protected:
     void sink_it_(const details::log_msg &msg) override { callback_(msg); }

@@ -30,8 +30,9 @@ namespace spdlog {
 namespace sinks {
 
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE stdout_sink_base<ConsoleMutex, Alloc>::stdout_sink_base(FILE *file)
-    : mutex_(ConsoleMutex::mutex()),
+SPDLOG_INLINE stdout_sink_base<ConsoleMutex, Alloc>::stdout_sink_base(FILE *file, Alloc alloc)
+    : sink<Alloc>(alloc),
+      mutex_(ConsoleMutex::mutex()),
       file_(file),
       formatter_(details::make_unique<spdlog::basic_pattern_formatter<Alloc>>()) {
 #ifdef _WIN32
@@ -55,7 +56,7 @@ SPDLOG_INLINE void stdout_sink_base<ConsoleMutex, Alloc>::log(const details::log
         return;
     }
     std::lock_guard<mutex_t> lock(mutex_);
-    basic_memory_buf_t<Alloc> formatted;
+    basic_memory_buf_t<Alloc> formatted(this->get_allocator());
     formatter_->format(msg, formatted);
     auto size = static_cast<DWORD>(formatted.size());
     DWORD bytes_written = 0;
@@ -66,7 +67,7 @@ SPDLOG_INLINE void stdout_sink_base<ConsoleMutex, Alloc>::log(const details::log
     }
 #else
     std::lock_guard<mutex_t> lock(mutex_);
-    basic_memory_buf_t<Alloc> formatted;
+    basic_memory_buf_t<Alloc> formatted(this->get_allocator());
     formatter_->format(msg, formatted);
     details::os::fwrite_bytes(formatted.data(), formatted.size(), file_);
 #endif                // _WIN32
@@ -95,13 +96,13 @@ SPDLOG_INLINE void stdout_sink_base<ConsoleMutex, Alloc>::set_formatter(
 
 // stdout sink
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE stdout_sink<ConsoleMutex, Alloc>::stdout_sink()
-    : stdout_sink_base<ConsoleMutex, Alloc>(stdout) {}
+SPDLOG_INLINE stdout_sink<ConsoleMutex, Alloc>::stdout_sink(Alloc alloc)
+    : stdout_sink_base<ConsoleMutex, Alloc>(stdout, alloc) {}
 
 // stderr sink
 template <typename ConsoleMutex, class Alloc>
-SPDLOG_INLINE stderr_sink<ConsoleMutex, Alloc>::stderr_sink()
-    : stdout_sink_base<ConsoleMutex, Alloc>(stderr) {}
+SPDLOG_INLINE stderr_sink<ConsoleMutex, Alloc>::stderr_sink(Alloc alloc)
+    : stdout_sink_base<ConsoleMutex, Alloc>(stderr, alloc) {}
 
 }  // namespace sinks
 

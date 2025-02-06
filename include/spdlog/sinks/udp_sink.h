@@ -36,15 +36,18 @@ struct udp_sink_config {
 template <typename Mutex, class Alloc = default_allocator_t>
 class udp_sink : public spdlog::sinks::base_sink<Mutex, Alloc> {
 public:
+    using allocator_type = Alloc;
+
     // host can be hostname or ip address
-    explicit udp_sink(udp_sink_config sink_config)
-        : client_{sink_config.server_host, sink_config.server_port} {}
+    explicit udp_sink(udp_sink_config sink_config, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          client_{sink_config.server_host, sink_config.server_port} {}
 
     ~udp_sink() override = default;
 
 protected:
     void sink_it_(const spdlog::details::log_msg &msg) override {
-        spdlog::basic_memory_buf_t<Alloc> formatted;
+        spdlog::basic_memory_buf_t<Alloc> formatted(this->get_allocator());
         spdlog::sinks::base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
         client_.send(formatted.data(), formatted.size());
     }

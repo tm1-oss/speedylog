@@ -25,6 +25,10 @@ class test_sink : public base_sink<Mutex, Alloc> {
 public:
     using string = std::basic_string<char, std::char_traits<char>, Alloc>;
     using string_alloc = typename std::allocator_traits<Alloc>::template rebind_alloc<string>;
+    using allocator_type = Alloc;
+
+    explicit test_sink(Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc) {}
 
     size_t msg_counter() {
         std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
@@ -49,7 +53,7 @@ public:
 
 protected:
     void sink_it_(const details::log_msg &msg) override {
-        basic_memory_buf_t<Alloc> formatted;
+        basic_memory_buf_t<Alloc> formatted(this->get_allocator());
         base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
         // save the line without the eol
         auto eol_len = strlen(details::os::default_eol);

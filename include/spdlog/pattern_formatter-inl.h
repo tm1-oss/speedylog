@@ -938,8 +938,11 @@ public:
 template <class Alloc>
 class full_formatter final : public flag_formatter<Alloc> {
 public:
-    explicit full_formatter(padding_info padinfo)
-        : flag_formatter<Alloc>(padinfo) {}
+    using allocator_type = Alloc;
+
+    explicit full_formatter(padding_info padinfo, Alloc alloc = Alloc())
+        : flag_formatter<Alloc>(padinfo),
+          cached_datetime_(alloc) {}
 
     void format(const details::log_msg &msg,
                 const std::tm &tm_time,

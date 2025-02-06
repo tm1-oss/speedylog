@@ -106,7 +106,7 @@ public:
     void apply_logger_env_levels(std::shared_ptr<basic_logger<Alloc>> new_logger);
 
 private:
-    registry();
+    explicit registry(Alloc alloc = Alloc());
     ~registry();
 
     void throw_if_exists_(const std::string &logger_name);

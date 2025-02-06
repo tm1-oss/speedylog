@@ -31,7 +31,7 @@ namespace spdlog {
 namespace details {
 
 template <class Alloc>
-SPDLOG_INLINE registry<Alloc>::registry()
+SPDLOG_INLINE registry<Alloc>::registry(Alloc alloc)
     : formatter_(new basic_pattern_formatter<Alloc>()) {
 #ifndef SPDLOG_DISABLE_DEFAULT_LOGGER
 // create default logger (ansicolor_stdout_sink_mt or wincolor_stdout_sink_mt in windows).
@@ -44,10 +44,12 @@ SPDLOG_INLINE registry<Alloc>::registry()
 #endif
 
     const char *default_logger_name = "";
-    default_logger_ =
-        std::make_shared<spdlog::basic_logger<Alloc>>(default_logger_name, std::move(color_sink));
+    default_logger_ = std::make_shared<spdlog::basic_logger<Alloc>>(default_logger_name,
+                                                                    std::move(color_sink), alloc);
     loggers_[default_logger_name] = default_logger_;
 
+#else
+    (void)alloc;
 #endif  // SPDLOG_DISABLE_DEFAULT_LOGGER
 }
 

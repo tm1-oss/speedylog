@@ -14,13 +14,15 @@
 #include <mutex>
 
 template <typename Mutex, class Alloc>
-SPDLOG_INLINE spdlog::sinks::base_sink<Mutex, Alloc>::base_sink()
-    : formatter_{details::make_unique<spdlog::basic_pattern_formatter<Alloc>>()} {}
+SPDLOG_INLINE spdlog::sinks::base_sink<Mutex, Alloc>::base_sink(Alloc alloc)
+    : sink<Alloc>(alloc),
+      formatter_{details::make_unique<spdlog::basic_pattern_formatter<Alloc>>()} {}
 
 template <typename Mutex, class Alloc>
 SPDLOG_INLINE spdlog::sinks::base_sink<Mutex, Alloc>::base_sink(
-    std::unique_ptr<spdlog::basic_formatter<Alloc>> formatter)
-    : formatter_{std::move(formatter)} {}
+    std::unique_ptr<spdlog::basic_formatter<Alloc>> formatter, Alloc alloc)
+    : sink<Alloc>(alloc),
+      formatter_{std::move(formatter)} {}
 
 template <typename Mutex, class Alloc>
 void SPDLOG_INLINE spdlog::sinks::base_sink<Mutex, Alloc>::log(const details::log_msg &msg) {
