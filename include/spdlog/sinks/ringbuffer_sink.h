@@ -20,8 +20,11 @@ namespace sinks {
 template <typename Mutex, class Alloc = default_allocator_t>
 class ringbuffer_sink final : public base_sink<Mutex, Alloc> {
 public:
-    explicit ringbuffer_sink(size_t n_items)
-        : q_{n_items} {
+    using allocator_type = Alloc;
+
+    explicit ringbuffer_sink(size_t n_items, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          q_{n_items} {
         if (n_items == 0) {
             throw_spdlog_ex("ringbuffer_sink: n_items cannot be zero");
         }
@@ -46,7 +49,7 @@ public:
         std::vector<std::string> ret;
         ret.reserve(n_items);
         for (size_t i = (items_available - n_items); i < items_available; i++) {
-            basic_memory_buf_t<Alloc> formatted;
+            basic_memory_buf_t<Alloc> formatted(this->get_allocator());
             base_sink<Mutex, Alloc>::formatter_->format(q_.at(i), formatted);
             ret.emplace_back(formatted.data(), formatted.size());
         }
@@ -55,7 +58,7 @@ public:
 
 protected:
     void sink_it_(const details::log_msg &msg) override {
-        q_.push_back(details::log_msg_buffer<Alloc>{msg});
+        q_.push_back(details::log_msg_buffer<Alloc>{msg, this->get_allocator()});
     }
     void flush_() override {}
 

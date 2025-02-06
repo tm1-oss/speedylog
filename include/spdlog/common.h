@@ -70,6 +70,33 @@
 #define SPDLOG_CONSTEXPR constexpr
 #endif
 
+// `if constexpr` is a C++17 feature, for earlier versions fallback to regular `if`
+#if __cplusplus >= 201703L
+#define SPDLOG_IF_CONSTEXPR if constexpr
+#else
+#define SPDLOG_IF_CONSTEXPR if
+#endif
+
+// Conditional noexcept for allocator-extended move ctor (C++17 and later).
+// An allocator-extended move is noexcept when the specified allocator is the same
+// as the allocator of the source.
+#if __cplusplus >= 201703L
+#define SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Allocator)                      \
+    noexcept(std::allocator_traits<Allocator>::is_always_equal::value)
+#else
+#define SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Allocator)
+#endif
+
+// Conditional noexcept for allocator-aware move-assignment (C++17 and later).
+// A move-assignment is noexcept when the allocator either propagates on move or is the same
+#if __cplusplus >= 201703L
+#define SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Allocator)                                            \
+    noexcept(std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value || \
+             std::allocator_traits<Allocator>::is_always_equal::value)
+#else
+#define SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Allocator)
+#endif
+
 // Conditional noexcept for allocator-aware swap (C++17 and later).
 // An allocator-aware swap is noexcept when the allocator either propagates on
 // swap (propagate_on_container_swap) or is always equal (is_always_equal).

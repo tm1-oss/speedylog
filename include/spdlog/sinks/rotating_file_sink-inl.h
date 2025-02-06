@@ -28,8 +28,10 @@ SPDLOG_INLINE rotating_file_sink<Mutex, Alloc>::rotating_file_sink(
     std::size_t max_size,
     std::size_t max_files,
     bool rotate_on_open,
-    const file_event_handlers &event_handlers)
-    : base_filename_(std::move(base_filename)),
+    const file_event_handlers &event_handlers,
+    Alloc alloc)
+    : base_sink<Mutex, Alloc>(alloc),
+      base_filename_(std::move(base_filename)),
       max_size_(max_size),
       max_files_(max_files),
       file_helper_{event_handlers} {
@@ -47,6 +49,21 @@ SPDLOG_INLINE rotating_file_sink<Mutex, Alloc>::rotating_file_sink(
         current_size_ = 0;
     }
 }
+
+template <typename Mutex, class Alloc>
+SPDLOG_INLINE rotating_file_sink<Mutex, Alloc>::rotating_file_sink(filename_t base_filename,
+                                                                   std::size_t max_size,
+                                                                   std::size_t max_files,
+                                                                   bool rotate_on_open,
+                                                                   Alloc alloc)
+    : rotating_file_sink(base_filename, max_size, max_files, rotate_on_open, {}, alloc) {}
+
+template <typename Mutex, class Alloc>
+SPDLOG_INLINE rotating_file_sink<Mutex, Alloc>::rotating_file_sink(filename_t base_filename,
+                                                                   std::size_t max_size,
+                                                                   std::size_t max_files,
+                                                                   Alloc alloc)
+    : rotating_file_sink(base_filename, max_size, max_files, false, alloc) {}
 
 // calc filename according to index and file extension if exists.
 // e.g. calc_filename("logs/mylog.txt, 3) => "logs/mylog.3.txt".
@@ -106,7 +123,7 @@ std::size_t rotating_file_sink<Mutex, Alloc>::get_max_files() {
 
 template <typename Mutex, class Alloc>
 SPDLOG_INLINE void rotating_file_sink<Mutex, Alloc>::sink_it_(const details::log_msg &msg) {
-    basic_memory_buf_t<Alloc> formatted;
+    basic_memory_buf_t<Alloc> formatted(this->get_allocator());
     base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
     auto new_size = current_size_ + formatted.size();
 

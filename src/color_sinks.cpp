@@ -28,7 +28,8 @@ template class SPDLOG_API spdlog::sinks::ansicolor_stdout_sink<spdlog::details::
 template class SPDLOG_API spdlog::sinks::ansicolor_stdout_sink<spdlog::details::console_nullmutex>;
 template class SPDLOG_API spdlog::sinks::ansicolor_stderr_sink<spdlog::details::console_mutex>;
 template class SPDLOG_API spdlog::sinks::ansicolor_stderr_sink<spdlog::details::console_nullmutex>;
-#endif
+
+#endif  // _WIN32
 
 // factory methods for color loggers
 #include "spdlog/sinks/stdout_color_sinks-inl.h"
