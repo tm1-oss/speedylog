@@ -35,3 +35,21 @@ template SPDLOG_API std::shared_ptr<spdlog::logger> spdlog::stderr_logger_mt<spd
     const std::string &logger_name);
 template SPDLOG_API std::shared_ptr<spdlog::logger> spdlog::stderr_logger_st<spdlog::async_factory>(
     const std::string &logger_name);
+
+#ifdef SPDLOG_POLYMORPHIC_ALLOCATORS
+    #include <memory_resource>
+
+template class SPDLOG_API spdlog::sinks::stdout_sink_base<spdlog::details::console_mutex,
+                                                          std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::stdout_sink_base<spdlog::details::console_nullmutex,
+                                                          std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::stdout_sink<spdlog::details::console_mutex,
+                                                     std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::stdout_sink<spdlog::details::console_nullmutex,
+                                                     std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::stderr_sink<spdlog::details::console_mutex,
+                                                     std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::stderr_sink<spdlog::details::console_nullmutex,
+                                                     std::pmr::polymorphic_allocator<char>>;
+
+#endif  // SPDLOG_POLYMORPHIC_ALLOCATORS
