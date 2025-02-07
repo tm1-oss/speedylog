@@ -12,3 +12,9 @@
 
 template class SPDLOG_API spdlog::basic_async_logger<spdlog::default_allocator_t>;
 template class SPDLOG_API spdlog::details::basic_thread_pool<spdlog::default_allocator_t>;
+
+#ifdef SPDLOG_POLYMORPHIC_ALLOCATORS
+    #include <memory_resource>
+template class SPDLOG_API spdlog::basic_async_logger<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::details::basic_thread_pool<std::pmr::polymorphic_allocator<char>>;
+#endif

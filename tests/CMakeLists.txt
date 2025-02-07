@@ -67,6 +67,7 @@ set(SPDLOG_UTESTS_SOURCES
     test_time_point.cpp
     test_stopwatch.cpp
     test_circular_q.cpp
+    test_polymorphic_allocators.cpp
     test_bin_to_hex.cpp
     test_ringbuffer.cpp
     test_timezone.cpp
