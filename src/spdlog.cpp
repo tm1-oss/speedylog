@@ -43,3 +43,18 @@ template class spdlog::details::registry<spdlog::default_allocator_t>;
 template class spdlog::basic_pattern_formatter<spdlog::default_allocator_t>;
 template class spdlog::basic_logger<spdlog::default_allocator_t>;
 template class spdlog::details::backtracer<spdlog::default_allocator_t>;
+
+#ifdef SPDLOG_POLYMORPHIC_ALLOCATORS
+#include <memory_resource>
+
+template class SPDLOG_API spdlog::sinks::sink<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API
+    spdlog::sinks::base_sink<std::mutex, std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API
+    spdlog::sinks::base_sink<spdlog::details::null_mutex, std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::details::registry<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::details::backtracer<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::details::log_msg_buffer<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::basic_pattern_formatter<std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::basic_logger<std::pmr::polymorphic_allocator<char>>;
+#endif
