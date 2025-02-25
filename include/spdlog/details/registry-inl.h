@@ -98,7 +98,7 @@ SPDLOG_INLINE void registry<Alloc>::initialize_logger(
 
 template <class Alloc>
 SPDLOG_INLINE std::shared_ptr<basic_logger<Alloc>> registry<Alloc>::get(
-    const std::string &logger_name) {
+    const string_type &logger_name) {
     std::lock_guard<std::mutex> lock(logger_map_mutex_);
     auto found = loggers_.find(logger_name);
     return found == loggers_.end() ? nullptr : found->second;
@@ -218,7 +218,7 @@ SPDLOG_INLINE void registry<Alloc>::flush_all() {
 }
 
 template <class Alloc>
-SPDLOG_INLINE void registry<Alloc>::drop(const std::string &logger_name) {
+SPDLOG_INLINE void registry<Alloc>::drop(const string_type &logger_name) {
     std::lock_guard<std::mutex> lock(logger_map_mutex_);
     auto is_default_logger = default_logger_ && default_logger_->name() == logger_name;
     loggers_.erase(logger_name);
@@ -294,9 +294,10 @@ SPDLOG_INLINE void registry<Alloc>::apply_logger_env_levels(
 }
 
 template <class Alloc>
-SPDLOG_INLINE void registry<Alloc>::throw_if_exists_(const std::string &logger_name) {
+SPDLOG_INLINE void registry<Alloc>::throw_if_exists_(const string_type &logger_name) {
     if (loggers_.find(logger_name) != loggers_.end()) {
-        throw_spdlog_ex("logger with name '" + logger_name + "' already exists");
+        throw_spdlog_ex("logger with name '" + std::string(logger_name.begin(), logger_name.end()) +
+                        "' already exists");
     }
 }
 

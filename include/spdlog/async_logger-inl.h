@@ -16,7 +16,7 @@
 
 template <class Alloc>
 SPDLOG_INLINE spdlog::basic_async_logger<Alloc>::basic_async_logger(
-    std::string logger_name,
+    string_type logger_name,
     sinks_init_list<Alloc> sinks_list,
     std::weak_ptr<details::basic_thread_pool<Alloc>> tp,
     async_overflow_policy overflow_policy)
@@ -28,7 +28,7 @@ SPDLOG_INLINE spdlog::basic_async_logger<Alloc>::basic_async_logger(
 
 template <class Alloc>
 SPDLOG_INLINE spdlog::basic_async_logger<Alloc>::basic_async_logger(
-    std::string logger_name,
+    string_type logger_name,
     sink_ptr<Alloc> single_sink,
     std::weak_ptr<details::basic_thread_pool<Alloc>> tp,
     async_overflow_policy overflow_policy)
@@ -89,7 +89,7 @@ SPDLOG_INLINE void spdlog::basic_async_logger<Alloc>::backend_flush_() {
 
 template <class Alloc>
 SPDLOG_INLINE std::shared_ptr<spdlog::basic_logger<Alloc>> spdlog::basic_async_logger<Alloc>::clone(
-    std::string new_name) {
+    string_type new_name) {
     auto cloned = std::make_shared<spdlog::basic_async_logger<Alloc>>(*this);
     cloned->name_ = std::move(new_name);
     return cloned;

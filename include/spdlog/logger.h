@@ -17,6 +17,8 @@
 #include <spdlog/common.h>
 #include <spdlog/details/backtracer.h>
 #include <spdlog/details/log_msg.h>
+#include <memory>
+#include <string>
 
 #ifdef SPDLOG_WCHAR_TO_UTF8_SUPPORT
 #ifndef _WIN32
@@ -47,36 +49,57 @@
 
 namespace spdlog {
 
+// Class ctors take two allocator arguments
+// - alloc_fmt_buf - for the formatting buffer, which may be (re)allocated multiple times in logger lifetime
+// - alloc_data - for name, sinks, and other internal data allocated for logger lifetime
 template <class Alloc>
 class SPDLOG_API basic_logger : private Alloc {
 public:
+    static_assert(std::is_same<char, typename Alloc::value_type>::value,
+                  "Allocator type of basic_logger must have char as the value_type");
+
+    using string_type = std::basic_string<char, std::char_traits<char>, Alloc>;
+
     // Empty logger
-    explicit basic_logger(std::string name, Alloc alloc = Alloc())
-        : Alloc(alloc),
-          name_(std::move(name)),
+    explicit basic_logger(string_type name,
+                          Alloc alloc_fmt_buf = Alloc(),
+                          Alloc alloc_data = Alloc())
+        : Alloc(alloc_fmt_buf),
+          name_(std::move(name), alloc_data),
           sinks_() {}
 
     // Logger with range on sinks
     template <typename It>
-    basic_logger(std::string name, It begin, It end, Alloc alloc = Alloc())
-        : Alloc(alloc),
-          name_(std::move(name)),
+    basic_logger(string_type name,
+                 It begin,
+                 It end,
+                 Alloc alloc_fmt_buf = Alloc(),
+                 Alloc alloc_data = Alloc())
+        : Alloc(alloc_fmt_buf),
+          name_(std::move(name), alloc_data),
           sinks_(begin, end) {}
 
     // Logger with single sink
-    basic_logger(std::string name, sink_ptr<Alloc> single_sink, Alloc alloc = Alloc())
-        : basic_logger(std::move(name), {std::move(single_sink)}, alloc) {}
+    basic_logger(string_type name,
+                 sink_ptr<Alloc> single_sink,
+                 Alloc alloc_fmt_buf = Alloc(),
+                 Alloc alloc_data = Alloc())
+        : basic_logger(std::move(name), {std::move(single_sink)}, alloc_fmt_buf, alloc_data) {}
 
     // Logger with sinks init list
-    basic_logger(std::string name, sinks_init_list<Alloc> sinks, Alloc alloc = Alloc())
-        : basic_logger(std::move(name), sinks.begin(), sinks.end(), alloc) {}
+    basic_logger(string_type name,
+                 sinks_init_list<Alloc> sinks,
+                 Alloc alloc_fmt_buf = Alloc(),
+                 Alloc alloc_data = Alloc())
+        : basic_logger(std::move(name), sinks.begin(), sinks.end(), alloc_fmt_buf, alloc_data) {}
 
     virtual ~basic_logger() = default;
 
     basic_logger(const basic_logger &other);
-    basic_logger(const basic_logger &other, Alloc alloc);
+    basic_logger(const basic_logger &other, Alloc alloc_fmt_buf, Alloc alloc_data);
     basic_logger(basic_logger &&other) SPDLOG_NOEXCEPT;
-    basic_logger(basic_logger &&other, Alloc alloc) SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc);
+    basic_logger(basic_logger &&other, Alloc alloc_fmt_buf, Alloc alloc_data)
+        SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc);
     basic_logger &operator=(const basic_logger &other);
     basic_logger &operator=(basic_logger &&other) SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Alloc);
     void swap(basic_logger &other) SPDLOG_ALLOC_SWAP_NOEXCEPT(Alloc);
@@ -276,7 +299,7 @@ public:
 
     level::level_enum level() const;
 
-    const std::string &name() const;
+    const string_type &name() const;
 
     // set formatting for the sinks in this logger.
     // each sink will get a separate instance of the formatter object.
@@ -304,14 +327,17 @@ public:
 
     std::vector<sink_ptr<Alloc>> &sinks();
 
+    // Return the allocator used for the formatting buffer.
+    Alloc get_fmt_buf_allocator() const { return static_cast<const Alloc &>(*this); }
+
     // error handler
     void set_error_handler(err_handler);
 
     // create new logger with same sinks and configuration.
-    virtual std::shared_ptr<basic_logger> clone(std::string logger_name);
+    virtual std::shared_ptr<basic_logger> clone(string_type logger_name);
 
 protected:
-    std::string name_;
+    string_type name_;
     std::vector<sink_ptr<Alloc>> sinks_;
     spdlog::level_t level_{level::info};
     spdlog::level_t flush_level_{level::off};

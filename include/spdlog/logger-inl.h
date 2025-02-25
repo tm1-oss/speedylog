@@ -28,9 +28,11 @@ SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other)
       tracer_(other.tracer_) {}
 
 template <class Alloc>
-SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other, Alloc alloc)
-    : Alloc(alloc),
-      name_(other.name_),
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(const basic_logger &other,
+                                                Alloc alloc_fmt_buf,
+                                                Alloc alloc_data)
+    : Alloc(alloc_fmt_buf),
+      name_(other.name_, alloc_data),
       sinks_(other.sinks_),
       level_(other.level_.load(std::memory_order_relaxed)),
       flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
@@ -48,9 +50,11 @@ SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other) SPDLOG_NOE
       tracer_(std::move(other.tracer_)) {}
 
 template <class Alloc>
-SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other, Alloc alloc) SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc)
-    : Alloc(alloc),
-      name_(std::move(other.name_)),
+SPDLOG_INLINE basic_logger<Alloc>::basic_logger(basic_logger &&other,
+                                                Alloc alloc_fmt_buf,
+                                                Alloc alloc_data) SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Alloc)
+    : Alloc(alloc_fmt_buf),
+      name_(std::move(other.name_), alloc_data),
       sinks_(std::move(other.sinks_)),
       level_(other.level_.load(std::memory_order_relaxed)),
       flush_level_(other.flush_level_.load(std::memory_order_relaxed)),
@@ -139,7 +143,7 @@ SPDLOG_INLINE level::level_enum basic_logger<Alloc>::level() const {
 }
 
 template <class Alloc>
-SPDLOG_INLINE const std::string &basic_logger<Alloc>::name() const {
+SPDLOG_INLINE const typename basic_logger<Alloc>::string_type &basic_logger<Alloc>::name() const {
     return name_;
 }
 
@@ -219,7 +223,7 @@ SPDLOG_INLINE void basic_logger<Alloc>::set_error_handler(err_handler handler) {
 // create new logger with same sinks and configuration.
 template <class Alloc>
 SPDLOG_INLINE std::shared_ptr<basic_logger<Alloc>> basic_logger<Alloc>::clone(
-    std::string logger_name) {
+    string_type logger_name) {
     auto cloned = std::make_shared<basic_logger>(*this);
     cloned->name_ = std::move(logger_name);
     return cloned;

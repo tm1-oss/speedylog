@@ -38,8 +38,10 @@ class SPDLOG_API basic_async_logger final
     friend class details::basic_thread_pool<Alloc>;
 
 public:
+    using typename basic_logger<Alloc>::string_type;
+
     template <typename It>
-    basic_async_logger(std::string logger_name,
+    basic_async_logger(string_type logger_name,
                        It begin,
                        It end,
                        std::weak_ptr<details::basic_thread_pool<Alloc>> tp,
@@ -48,17 +50,17 @@ public:
           thread_pool_(std::move(tp)),
           overflow_policy_(overflow_policy) {}
 
-    basic_async_logger(std::string logger_name,
+    basic_async_logger(string_type logger_name,
                        sinks_init_list<Alloc> sinks_list,
                        std::weak_ptr<details::basic_thread_pool<Alloc>> tp,
                        async_overflow_policy overflow_policy = async_overflow_policy::block);
 
-    basic_async_logger(std::string logger_name,
+    basic_async_logger(string_type logger_name,
                        sink_ptr<Alloc> single_sink,
                        std::weak_ptr<details::basic_thread_pool<Alloc>> tp,
                        async_overflow_policy overflow_policy = async_overflow_policy::block);
 
-    std::shared_ptr<basic_logger<Alloc>> clone(std::string new_name) override;
+    std::shared_ptr<basic_logger<Alloc>> clone(string_type new_name) override;
 
 protected:
     void sink_it_(const details::log_msg &msg) override;
