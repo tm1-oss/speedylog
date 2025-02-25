@@ -25,6 +25,7 @@ template SPDLOG_API spdlog::basic_logger<spdlog::default_allocator_t>::basic_log
     std::string name,
     sinks_init_list<default_allocator_t>::iterator begin,
     sinks_init_list<default_allocator_t>::iterator end,
+    spdlog::default_allocator_t,
     spdlog::default_allocator_t);
 template class SPDLOG_API spdlog::sinks::base_sink<std::mutex, spdlog::default_allocator_t>;
 template class SPDLOG_API

@@ -31,14 +31,18 @@ class basic_thread_pool;
 template <class Alloc = default_allocator_t>
 class SPDLOG_API registry {
 public:
-    using log_levels = std::unordered_map<std::string, level::level_enum>;
+    static_assert(std::is_same<char, typename Alloc::value_type>::value,
+                  "Allocator type of registry must have char as the value_type");
+
+    using string_type = std::basic_string<char, std::char_traits<char>, Alloc>;
+    using log_levels = std::unordered_map<string_type, level::level_enum>;
     registry(const registry &) = delete;
     registry &operator=(const registry &) = delete;
 
     void register_logger(std::shared_ptr<basic_logger<Alloc>> new_logger);
     void register_or_replace(std::shared_ptr<basic_logger<Alloc>> new_logger);
     void initialize_logger(std::shared_ptr<basic_logger<Alloc>> new_logger);
-    std::shared_ptr<basic_logger<Alloc>> get(const std::string &logger_name);
+    std::shared_ptr<basic_logger<Alloc>> get(const string_type &logger_name);
     std::shared_ptr<basic_logger<Alloc>> default_logger();
 
     // Return raw ptr to the default logger.
@@ -87,7 +91,7 @@ public:
 
     void flush_all();
 
-    void drop(const std::string &logger_name);
+    void drop(const string_type &logger_name);
 
     void drop_all();
 
@@ -109,13 +113,13 @@ private:
     explicit registry(Alloc alloc = Alloc());
     ~registry();
 
-    void throw_if_exists_(const std::string &logger_name);
+    void throw_if_exists_(const string_type &logger_name);
     void register_logger_(std::shared_ptr<basic_logger<Alloc>> new_logger);
     void register_or_replace_(std::shared_ptr<basic_logger<Alloc>> new_logger);
     bool set_level_from_cfg_(basic_logger<Alloc> *logger);
     std::mutex logger_map_mutex_, flusher_mutex_;
     std::recursive_mutex tp_mutex_;
-    std::unordered_map<std::string, std::shared_ptr<basic_logger<Alloc>>> loggers_;
+    std::unordered_map<string_type, std::shared_ptr<basic_logger<Alloc>>> loggers_;
     log_levels log_levels_;
     std::unique_ptr<basic_formatter<Alloc>> formatter_;
     spdlog::level::level_enum global_log_level_ = level::info;
