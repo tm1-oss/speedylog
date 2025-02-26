@@ -60,13 +60,14 @@ public:
 
     using string_type = std::basic_string<char, std::char_traits<char>, Alloc>;
 
+    template <typename T>
+    using vector_type =
+        std::vector<T, typename std::allocator_traits<Alloc>::template rebind_alloc<T>>;
+
     // Empty logger
     explicit basic_logger(string_type name,
                           Alloc alloc_fmt_buf = Alloc(),
-                          Alloc alloc_data = Alloc())
-        : Alloc(alloc_fmt_buf),
-          name_(std::move(name), alloc_data),
-          sinks_() {}
+                          Alloc alloc_data = Alloc());
 
     // Logger with range on sinks
     template <typename It>
@@ -77,23 +78,27 @@ public:
                  Alloc alloc_data = Alloc())
         : Alloc(alloc_fmt_buf),
           name_(std::move(name), alloc_data),
-          sinks_(begin, end) {}
+          sinks_(begin, end, alloc_data) {}
+
+    // Logger with sinks in a vector
+    basic_logger(string_type name,
+                 vector_type<sink_ptr<Alloc>> sinks,
+                 Alloc alloc_fmt_buf = Alloc(),
+                 Alloc alloc_data = Alloc());
 
     // Logger with single sink
     basic_logger(string_type name,
                  sink_ptr<Alloc> single_sink,
                  Alloc alloc_fmt_buf = Alloc(),
-                 Alloc alloc_data = Alloc())
-        : basic_logger(std::move(name), {std::move(single_sink)}, alloc_fmt_buf, alloc_data) {}
+                 Alloc alloc_data = Alloc());
 
     // Logger with sinks init list
     basic_logger(string_type name,
                  sinks_init_list<Alloc> sinks,
                  Alloc alloc_fmt_buf = Alloc(),
-                 Alloc alloc_data = Alloc())
-        : basic_logger(std::move(name), sinks.begin(), sinks.end(), alloc_fmt_buf, alloc_data) {}
+                 Alloc alloc_data = Alloc());
 
-    virtual ~basic_logger() = default;
+    virtual ~basic_logger();
 
     basic_logger(const basic_logger &other);
     basic_logger(const basic_logger &other, Alloc alloc_fmt_buf, Alloc alloc_data);
@@ -323,9 +328,9 @@ public:
     level::level_enum flush_level() const;
 
     // sinks
-    const std::vector<sink_ptr<Alloc>> &sinks() const;
+    const vector_type<sink_ptr<Alloc>> &sinks() const;
 
-    std::vector<sink_ptr<Alloc>> &sinks();
+    vector_type<sink_ptr<Alloc>> &sinks();
 
     // Return the allocator used for the formatting buffer.
     Alloc get_fmt_buf_allocator() const { return static_cast<const Alloc &>(*this); }
@@ -338,7 +343,7 @@ public:
 
 protected:
     string_type name_;
-    std::vector<sink_ptr<Alloc>> sinks_;
+    vector_type<sink_ptr<Alloc>> sinks_;
     spdlog::level_t level_{level::info};
     spdlog::level_t flush_level_{level::off};
     err_handler custom_err_handler_{nullptr};
