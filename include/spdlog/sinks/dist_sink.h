@@ -23,12 +23,16 @@ template <typename Mutex, class Alloc>
 class dist_sink : public base_sink<Mutex, Alloc> {
 public:
     using allocator_type = Alloc;
+    using sink_ptr_alloc =
+        typename std::allocator_traits<Alloc>::template rebind_alloc<std::shared_ptr<sink<Alloc>>>;
+    using sinks_vector_t = std::vector<std::shared_ptr<sink<Alloc>>, sink_ptr_alloc>;
 
     explicit dist_sink(Alloc alloc = Alloc())
-        : base_sink<Mutex, Alloc>(alloc) {}
-    explicit dist_sink(std::vector<std::shared_ptr<sink<Alloc>>> sinks, Alloc alloc = Alloc())
         : base_sink<Mutex, Alloc>(alloc),
-          sinks_(sinks) {}
+          sinks_(sink_ptr_alloc(alloc)) {}
+    explicit dist_sink(sinks_vector_t sinks, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          sinks_(std::move(sinks)) {}
 
     dist_sink(const dist_sink &) = delete;
     dist_sink &operator=(const dist_sink &) = delete;
@@ -43,12 +47,12 @@ public:
         sinks_.erase(std::remove(sinks_.begin(), sinks_.end(), sub_sink), sinks_.end());
     }
 
-    void set_sinks(std::vector<std::shared_ptr<sink<Alloc>>> sinks) {
+    void set_sinks(sinks_vector_t sinks) {
         std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         sinks_ = std::move(sinks);
     }
 
-    std::vector<std::shared_ptr<sink<Alloc>>> &sinks() { return sinks_; }
+    sinks_vector_t &sinks() { return sinks_; }
 
 protected:
     void sink_it_(const details::log_msg &msg) override {
@@ -75,7 +79,7 @@ protected:
             sub_sink->set_formatter(base_sink<Mutex, Alloc>::formatter_->clone());
         }
     }
-    std::vector<std::shared_ptr<sink<Alloc>>> sinks_;
+    sinks_vector_t sinks_;
 };
 
 using dist_sink_mt = dist_sink<std::mutex, default_allocator_t>;
