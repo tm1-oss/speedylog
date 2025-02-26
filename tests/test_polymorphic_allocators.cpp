@@ -85,9 +85,6 @@ TEST_CASE("polymorphic allocators") {
         std::pmr::set_default_resource(&mem_res_default);
         just_log(*test_sink, logger);
         std::pmr::set_default_resource(nullptr);
-
-        CHECK(mem_res_data.allocations == 0);
-        CHECK(mem_res_data.alloc_bytes == 0);
     }
 
     SECTION("many sinks") {
@@ -101,20 +98,33 @@ TEST_CASE("polymorphic allocators") {
                     "a very long logger name to defeat small buffer optimization in std::string",
                     alloc_data),
                 {test_sink, test_sink_2}, alloc_buf_fmt, alloc_data);
-            CHECK(mem_res_data.allocations == 1 + allocs_at_start);
+            CHECK(mem_res_data.allocations ==
+                  2 + allocs_at_start);  // name once and vector of sinks once
+            just_log(*test_sink_2, logger_2);
+        }
+
+        SECTION("create logger with vector of sinks") {
+            const auto allocs_at_start = mem_res_data.allocations;
+            auto logger_2 = spdlog::basic_logger<allocator>(
+                std::pmr::string(
+                    "a very long logger name to defeat small buffer optimization in std::string",
+                    alloc_data),
+                std::pmr::vector<spdlog::sink_ptr<allocator>>{{test_sink, test_sink_2}, alloc_data},
+                alloc_buf_fmt, alloc_data);
+            CHECK(mem_res_data.allocations ==
+                  2 + allocs_at_start);  // name once and vector of sinks once
             just_log(*test_sink_2, logger_2);
         }
 
         std::pmr::set_default_resource(nullptr);
-
-        CHECK(mem_res_default.allocations == 0);
-        CHECK(mem_res_default.alloc_bytes == 0);
-        CHECK(mem_res_data.allocations >= 1);
-        CHECK(mem_res_data.alloc_bytes > 0);
     }
 
+    CHECK(mem_res_default.allocations == 0);
+    CHECK(mem_res_default.alloc_bytes == 0);
     CHECK(mem_res_buf_fmt.allocations >= 2);  // in logger and in formatter
     CHECK(mem_res_buf_fmt.alloc_bytes > 0);
+    CHECK(mem_res_data.allocations >= 1);
+    CHECK(mem_res_data.alloc_bytes > 0);
 }
 
 #endif
