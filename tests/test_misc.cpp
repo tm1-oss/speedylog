@@ -7,6 +7,21 @@
 
 #include <vector>
 
+namespace {
+
+#if !defined(SPDLOG_NO_EXCEPTIONS)
+
+// A sink that always throws, used to exercise the error-handler path
+class failing_sink : public spdlog::sinks::base_sink<std::mutex> {
+protected:
+    void sink_it_(const spdlog::details::log_msg&) final { throw std::runtime_error("sink error"); }
+    void flush_() final {}
+};
+
+#endif  // !defined(SPDLOG_NO_EXCEPTIONS)
+
+}  // namespace
+
 template <class T>
 std::string log_info(const T& what, spdlog::level::level_enum logger_level = spdlog::level::info) {
     std::ostringstream oss;
@@ -159,29 +174,143 @@ TEST_CASE("stack logger object", "[stack logger]") {
     }
 
     SECTION("copy assignment") {
+        logger.set_level(spdlog::level::warn);
+        logger.flush_on(spdlog::level::err);
+
         spdlog::logger logger_copy("another name");
         logger_copy = logger;
         CHECK(logger_copy.name() == "orig");
         CHECK(logger.sinks() == logger_copy.sinks());
-        CHECK(logger.level() == logger_copy.level());
-        CHECK(logger.flush_level() == logger_copy.flush_level());
-        logger.info("Some message 1");
-        logger_copy.info("Some message 2");
+        CHECK(logger_copy.level() == spdlog::level::warn);
+        CHECK(logger_copy.flush_level() == spdlog::level::err);
+        logger.warn("Some message 1");
+        logger_copy.warn("Some message 2");
         CHECK(test_sink->lines() ==
               std::vector<std::string>{{"Some message 1"}, {"Some message 2"}});
     }
 
+#if !defined(SPDLOG_NO_EXCEPTIONS)  // err_handler does not work with no_exceptions
+
+    SECTION("copy assignment transfers err_handler") {
+        // Attach a sink that throws so sink_it_ routes to the error handler.
+        auto bad_sink = std::make_shared<failing_sink>();
+        logger.sinks().push_back(bad_sink);
+
+        bool handler_called = false;
+        logger.set_error_handler([&handler_called](const std::string&) { handler_called = true; });
+
+        spdlog::logger logger_copy("another name");
+        logger_copy = logger;
+        handler_called = false;  // reset — we want the copy's handler
+        logger_copy.info("trigger");
+        CHECK(handler_called);
+    }
+
+    SECTION("move assignment transfers err_handler") {
+        auto bad_sink = std::make_shared<failing_sink>();
+        logger.sinks().push_back(bad_sink);
+
+        bool handler_called = false;
+        logger.set_error_handler([&handler_called](const std::string&) { handler_called = true; });
+
+        spdlog::logger logger2("another name");
+        logger2 = std::move(logger);
+        logger2.info("trigger");
+        CHECK(handler_called);
+    }
+
+#endif  // !defined(SPDLOG_NO_EXCEPTIONS)
+
+    SECTION("self copy-assign") {
+        logger.set_level(spdlog::level::warn);
+        logger.flush_on(spdlog::level::err);
+
+        // Suppress -Wself-assign-overloaded (clang rejects the auto& trick)
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wself-assign-overloaded"
+#endif
+        logger = logger;  // NOLINT
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif
+
+        CHECK(logger.name() == "orig");
+        CHECK(logger.level() == spdlog::level::warn);
+        CHECK(logger.flush_level() == spdlog::level::err);
+        CHECK(logger.sinks() == std::vector<spdlog::sink_ptr<>>{test_sink});
+    }
+
+    SECTION("self move-assign") {
+        logger.set_level(spdlog::level::warn);
+        logger.flush_on(spdlog::level::err);
+
+        // Suppress -Wself-move
+#if defined(__clang__) || defined(__GNUC__) && __GNUC__ >= 13
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wself-move"
+#endif
+        logger = std::move(logger);  // NOLINT
+#if defined(__clang__) || defined(__GNUC__) && __GNUC__ >= 13
+#pragma GCC diagnostic pop
+#endif
+
+        // The standard only requires the object be left in a valid (destructible)
+        // state after self-move. We additionally verify the fields are unchanged
+        // since our implementation assigns member-by-member with no early exit.
+        CHECK(logger.name() == "orig");
+        CHECK(logger.level() == spdlog::level::warn);
+        CHECK(logger.flush_level() == spdlog::level::err);
+    }
+
+    SECTION("swap") {
+        auto test_sink_2 = std::make_shared<test_sink_mt>();
+        spdlog::logger logger2("other", test_sink_2);
+        logger.set_level(spdlog::level::warn);
+        logger.flush_on(spdlog::level::err);
+        logger2.set_level(spdlog::level::debug);
+        logger2.flush_on(spdlog::level::warn);
+
+        logger.swap(logger2);
+
+        // names swapped
+        CHECK(logger.name() == "other");
+        CHECK(logger2.name() == "orig");
+        // levels swapped
+        CHECK(logger.level() == spdlog::level::debug);
+        CHECK(logger2.level() == spdlog::level::warn);
+        // flush levels swapped
+        CHECK(logger.flush_level() == spdlog::level::warn);
+        CHECK(logger2.flush_level() == spdlog::level::err);
+        // sinks swapped
+        CHECK(logger.sinks() == std::vector<spdlog::sink_ptr<>>{test_sink_2});
+        CHECK(logger2.sinks() == std::vector<spdlog::sink_ptr<>>{test_sink});
+
+        // free swap is equivalent
+        swap(logger, logger2);
+        CHECK(logger.name() == "orig");
+        CHECK(logger2.name() == "other");
+    }
+
     SECTION("move") {
+        logger.set_level(spdlog::level::warn);
+        logger.flush_on(spdlog::level::err);
+
         auto logger2 = std::move(logger);
         CHECK(logger2.name() == "orig");
-        logger.info("Some message 1");
-        logger2.info("Some message 3");
+        CHECK(logger2.level() == spdlog::level::warn);
+        CHECK(logger2.flush_level() == spdlog::level::err);
+        CHECK(logger2.sinks() == std::vector<spdlog::sink_ptr<>>{test_sink});
+        logger.info("Some message 1");  // moved-from: no sinks, not logged
+        logger2.warn("Some message 3");
         CHECK(test_sink->lines() == std::vector<std::string>{{"Some message 3"}});
 
         logger = std::move(logger2);
         CHECK(logger.name() == "orig");
-        logger.info("Some message 2");
-        logger2.info("Some message 4");
+        CHECK(logger.level() == spdlog::level::warn);
+        CHECK(logger.flush_level() == spdlog::level::err);
+        logger.warn("Some message 2");
+        logger2.warn("Some message 4");  // moved-from: no sinks, not logged
         CHECK(test_sink->lines() ==
               std::vector<std::string>{{"Some message 3"}, {"Some message 2"}});
     }

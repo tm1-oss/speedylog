@@ -73,6 +73,11 @@ set(SPDLOG_UTESTS_SOURCES
     test_timezone.cpp
 )
 
+# Tests that require all templates to be available (header-only build only)
+set(SPDLOG_UTESTS_HO_EXTRA_SOURCES
+    test_logger_alloc.cpp
+)
+
 if(NOT SPDLOG_NO_EXCEPTIONS)
     list(APPEND SPDLOG_UTESTS_SOURCES test_errors.cpp)
 endif()
@@ -117,5 +122,6 @@ endif()
 
 # The header-only library version tests
 if(SPDLOG_BUILD_TESTS_HO OR SPDLOG_BUILD_ALL)
+    list(APPEND SPDLOG_UTESTS_SOURCES ${SPDLOG_UTESTS_HO_EXTRA_SOURCES})
     spdlog_prepare_test(speedylog-utests-ho speedylog::speedylog_header_only)
 endif()
