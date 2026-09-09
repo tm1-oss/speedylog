@@ -37,7 +37,7 @@ private:
         std::pmr::new_delete_resource()->deallocate(p, bytes, alignment);
     }
     bool do_is_equal(const memory_resource &other) const noexcept override {
-        return dynamic_cast<const test_mem_resource *>(&other) != nullptr;
+        return this == &other;
     }
 };
 
@@ -125,6 +125,89 @@ TEST_CASE("polymorphic allocators") {
     CHECK(mem_res_buf_fmt.alloc_bytes > 0);
     CHECK(mem_res_data.allocations >= 1);
     CHECK(mem_res_data.alloc_bytes > 0);
+}
+
+TEST_CASE("polymorphic allocator copy-assign", "[pmr][assign]") {
+    // destination keeps its own allocator after copy-assign
+    test_mem_resource mem_res_src, mem_res_dst;
+    allocator alloc_src(&mem_res_src), alloc_dst(&mem_res_dst);
+
+    auto test_sink = std::make_shared<test_sink_pmr>();
+    auto src = spdlog::basic_logger<allocator>(std::pmr::string("src", alloc_src), test_sink,
+                                               alloc_src, alloc_src);
+    src.set_level(spdlog::level::warn);
+    src.flush_on(spdlog::level::err);
+
+    auto dst =
+        spdlog::basic_logger<allocator>(std::pmr::string("dst", alloc_dst), alloc_dst, alloc_dst);
+    dst = src;
+
+    // Allocator must NOT have propagated (POCCA=false)
+    CHECK(dst.get_fmt_buf_allocator() == alloc_dst);
+    CHECK(dst.get_fmt_buf_allocator() != alloc_src);
+
+    // Data must be copied
+    CHECK(dst.name() == "src");
+    CHECK(dst.level() == spdlog::level::warn);
+    CHECK(dst.flush_level() == spdlog::level::err);
+    CHECK(dst.sinks() == src.sinks());
+}
+
+TEST_CASE("polymorphic allocator move-assign", "[pmr][assign]") {
+    // destination keeps its own allocator after move-assign
+    test_mem_resource mem_res_src, mem_res_dst;
+    allocator alloc_src(&mem_res_src), alloc_dst(&mem_res_dst);
+
+    auto test_sink = std::make_shared<test_sink_pmr>();
+    auto src = spdlog::basic_logger<allocator>(std::pmr::string("src", alloc_src), test_sink,
+                                               alloc_src, alloc_src);
+    src.set_level(spdlog::level::warn);
+    src.flush_on(spdlog::level::err);
+    // Capture the sinks vector (same allocator type) before the move
+    spdlog::basic_logger<allocator>::vector_type<spdlog::sink_ptr<allocator>> src_sinks =
+        src.sinks();
+
+    auto dst =
+        spdlog::basic_logger<allocator>(std::pmr::string("dst", alloc_dst), alloc_dst, alloc_dst);
+    dst = std::move(src);
+
+    // Allocator must NOT have propagated (POCMA=false)
+    CHECK(dst.get_fmt_buf_allocator() == alloc_dst);
+    CHECK(dst.get_fmt_buf_allocator() != alloc_src);
+
+    // Data must be moved
+    CHECK(dst.name() == "src");
+    CHECK(dst.level() == spdlog::level::warn);
+    CHECK(dst.flush_level() == spdlog::level::err);
+    CHECK(dst.sinks() == src_sinks);
+}
+
+TEST_CASE("polymorphic allocator swap equal allocators", "[pmr][swap]") {
+    // Swap is only safe when allocators are equal; use the same memory resource for both loggers
+    test_mem_resource mem_res;
+    allocator alloc(&mem_res);
+
+    auto test_sink_a = std::make_shared<test_sink_pmr>();
+    auto test_sink_b = std::make_shared<test_sink_pmr>();
+    auto a =
+        spdlog::basic_logger<allocator>(std::pmr::string("a", alloc), test_sink_a, alloc, alloc);
+    auto b =
+        spdlog::basic_logger<allocator>(std::pmr::string("b", alloc), test_sink_b, alloc, alloc);
+    a.set_level(spdlog::level::warn);
+    b.set_level(spdlog::level::debug);
+
+    a.swap(b);
+
+    CHECK(a.name() == "b");
+    CHECK(b.name() == "a");
+    CHECK(a.level() == spdlog::level::debug);
+    CHECK(b.level() == spdlog::level::warn);
+    using sink_vec = spdlog::basic_logger<allocator>::vector_type<spdlog::sink_ptr<allocator>>;
+    sink_vec expected_a(alloc), expected_b(alloc);
+    expected_a.push_back(test_sink_b);
+    expected_b.push_back(test_sink_a);
+    CHECK(a.sinks() == expected_a);
+    CHECK(b.sinks() == expected_b);
 }
 
 #endif
