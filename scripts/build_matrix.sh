@@ -19,7 +19,9 @@
 #                    (defaults --build-type to "Debug"; mutually exclusive with --asan).
 #
 # Options for how to build:
-#   --jobs N         Parallel jobs for make and ctest.  Default: nproc.
+#   --jobs N         Number of parallel build/test iterations to run at once.
+#                    Each iteration itself uses -j1 for cmake and ctest.
+#                    Default: nproc.
 #   --rebuild        Wipe each build directory before configuring (preserves
 #                    _deps to avoid re-downloading dependencies).
 #   --rebuild-deps   Like --rebuild but also removes _deps, forcing all
@@ -100,13 +102,11 @@ if [[ -n "$sanitizer" ]]; then
 fi
 
 # Helpers
-pass=0
-fail=0
-skip=0
-declare -a failures=()
-
-log()  { echo "[build_matrix] $*"; }
-run()  {
+log() {
+    [[ -t 1 ]] && printf '\r\033[K'
+    echo "[build_matrix] $*"
+}
+run() {
     if [[ $dry_run -eq 1 ]]; then
         echo "DRY-RUN: $*"
     else
@@ -189,11 +189,13 @@ discover_compilers() {
     done
 }
 
-# ---------------------------------------------------------------------------
-# Build one combination
-# ---------------------------------------------------------------------------
-# Args: cxx  cxx_ver  cxx_std  bld_type  cmake_label  cmake_extra_flags…
+# Build one combination  (runs inside a worker subshell)
+#
+# Args: job_status_file  cxx_bin  cxx_ver  cxx_std  bld_type  cmake_label  [cmake_flags…]
+#
+# job_status_file receives exactly one line: PASS / CONFIGURE_FAIL <label> / BUILD_FAIL <label> / TEST_FAIL <label>.
 build_one() {
+    local job_status_file="$1"; shift
     local cxx_bin="$1"; shift
     local cxx_ver="$1"; shift   # e.g. "gcc-12" or "clang-15"
     local cxx_std="$1"; shift
@@ -202,7 +204,6 @@ build_one() {
     # remaining args are -DFOO=BAR pairs
 
     local label="${cxx_ver}/cxx${cxx_std}/${bld_type}/${cmake_label}"
-    banner "${label}"
 
     # Choose build directory.
     local build_dir
@@ -282,32 +283,128 @@ build_one() {
     log "Configure: ${cmake_cmd[*]}"
     if ! run "${cmake_cmd[@]}"; then
         log "CONFIGURE FAILED: ${label}"
-        failures+=("CONFIGURE ${label}")
-        (( fail++ )) || true
-        [[ $keep_going -eq 1 ]] || exit 1
+        echo "CONFIGURE_FAIL ${label}" > "${job_status_file}"
         return 1
     fi
 
-    # ---------- build ----------
-    if ! run cmake --build "${build_dir}" -- -j"${jobs}"; then
+    if [[ -e "${abort_flag}" ]]; then
+        echo "ABORTED ${label}" > "${job_status_file}"
+        return 1
+    fi
+
+    # Returns how many -j slots this job should use for cmake/ctest.
+    # When the queue is getting drained, spread the remaining $jobs slots evenly.
+    _build_parallelism() {
+        local pending=0 active=0 sf s
+        for sf in "${logdir}"/*.status; do
+            [[ -e "$sf" ]] || continue
+            s=$(< "$sf")
+            case "$s" in
+                PENDING)        (( pending++ )) || true ;;
+                RUNNING)        (( active++  )) || true ;;
+            esac
+        done
+        if (( pending > 0 )); then
+            echo 1
+        else
+            echo $(( active > 0 ? jobs / active : jobs ))
+        fi
+    }
+
+    local _j
+    _j=$(_build_parallelism)
+    if ! run cmake --build "${build_dir}" -- "-j${_j}"; then
         log "BUILD FAILED: ${label}"
-        failures+=("BUILD ${label}")
-        (( fail++ )) || true
-        [[ $keep_going -eq 1 ]] || exit 1
+        echo "BUILD_FAIL ${label}" > "${job_status_file}"
         return 1
     fi
 
-    # ---------- test ----------
-    if ! run ctest --test-dir "${build_dir}" -j"${jobs}" --output-on-failure; then
+    if [[ -e "${abort_flag}" ]]; then
+        echo "ABORTED ${label}" > "${job_status_file}"
+        return 1
+    fi
+
+    _j=$(_build_parallelism)
+    if ! run ctest --test-dir "${build_dir}" "-j${_j}" --output-on-failure; then
         log "TEST FAILED: ${label}"
-        failures+=("TEST ${label}")
-        (( fail++ )) || true
-        [[ $keep_going -eq 1 ]] || exit 1
+        echo "TEST_FAIL ${label}" > "${job_status_file}"
         return 1
     fi
 
     log "PASSED: ${label}"
-    (( pass++ )) || true
+    echo "PASS" > "${job_status_file}"
+}
+
+# Parallel worker pool. A named pipe acts as a counting semaphore capping concurrency to $jobs.
+# Each token is one free slot; workers acquire before starting, release on exit.
+
+# Log directory persists after the script so per-iteration logs are inspectable.
+logdir="${repo_root}/build/build_matrix_logs/$(date +%Y%m%d-%H%M%S)"
+readonly logdir
+mkdir -p "${logdir}"
+
+readonly sem_fifo="${logdir}/sem"
+mkfifo "${sem_fifo}"
+exec 3<>"${sem_fifo}"
+for (( _i=0; _i<jobs; _i++ )); do printf '\n' >&3; done
+
+# abort_flag is set when a worker fails and keep_going=0, or on SIGINT
+readonly abort_flag="${logdir}/abort"
+
+# On SIGINT: set the abort flag, then flood the semaphore FIFO to unblock all jobs;
+# already-running jobs are left to finish.
+trap '
+    echo ""
+    log "Interrupted - waiting for in-flight jobs to finish..."
+    touch "${abort_flag}"
+    for (( _s=0; _s<=jobs; _s++ )); do printf "\n" >&3; done
+    wait_with_progress
+    log "Done."
+    exit 130
+' INT
+
+# Enqueue one combination as a background worker.
+# Args: cxx_bin cxx_ver cxx_std bld_type combo_label [extra_flags…]
+enqueue_job() {
+    local safe_label="${2}/cxx${3}/${4}/${5}"
+    safe_label="${safe_label//\//__}"
+    local log_file="${logdir}/${safe_label}.log"
+    local job_status_file="${logdir}/${safe_label}.status"
+
+    (
+        # Always return the semaphore token
+        trap 'printf "\n" >&3' EXIT
+
+        echo "PENDING" > "${job_status_file}"
+
+        # Acquire a token, blocks if no tokens
+        read -r -n1 <&3 || true
+
+        if [[ -e "${abort_flag}" ]]; then
+            exit 0
+        fi
+
+        local label="${2}/cxx${3}/${4}/${5}"
+        echo "RUNNING" > "${job_status_file}"
+        log "STARTED  ${label}"
+
+        # Run build/test
+        local _t0
+        _t0=$(date +%s)
+        build_one "${job_status_file}" "$@" >"${log_file}" 2>&1 || true
+        local _elapsed=$(( $(date +%s) - _t0 ))
+
+        local status_word
+        status_word=$(< "${job_status_file}")
+        status_word="${status_word%% *}"
+
+        if [[ "${status_word}" != "PASS" ]] && [[ $keep_going -eq 0 ]]; then
+            # Abort on failure
+            touch "${abort_flag}"
+        fi
+
+        log "FINISHED ${status_word}  ${label}  (${_elapsed}s)  ->  ${log_file#"${repo_root}/"}"
+    ) &
 }
 
 # CMake option combinations (Linux-meaningful)
@@ -348,9 +445,11 @@ log "Found compilers: ${compilers[*]}"
 log "Build types: ${build_types[*]}"
 log "Sanitizer: ${sanitizer:-none}"
 log "Reuse build dir: ${reuse_dir}"
-log "Parallel jobs: ${jobs}"
+log "Parallel iterations: ${jobs} (each iteration uses -j1 for cmake/ctest)"
+log "Logs: ${logdir}/"
 echo ""
 
+skip=0
 for cxx in "${compilers[@]}"; do
     # Identify compiler type and major version
     read -r comp_kind comp_majver <<< "$(compiler_id "$cxx")"
@@ -388,7 +487,10 @@ for cxx in "${compilers[@]}"; do
         fi
         for bld_type in "${build_types[@]}"; do
             for combo in "${option_combos[@]}"; do
-                # Parse the combo string: first word is label, rest are flags.
+                if [[ -e "${abort_flag}" ]]; then
+                    break 4
+                fi
+
                 read -ra combo_parts <<< "$combo"
                 combo_label="${combo_parts[0]}"
                 combo_flags=("${combo_parts[@]:1}")
@@ -409,18 +511,85 @@ for cxx in "${compilers[@]}"; do
                     continue
                 fi
 
-                # ---- Run this combination ----
-                build_one \
-                    "$cxx" \
-                    "$cxx_ver_tag" \
-                    "$cxx_std" \
-                    "$bld_type" \
-                    "$combo_label" \
-                    "${combo_flags[@]+"${combo_flags[@]}"}"
+                # Dispatch to the worker pool
+                if [[ $dry_run -eq 1 ]]; then
+                    build_one \
+                        "/dev/null" \
+                        "$cxx" \
+                        "$cxx_ver_tag" \
+                        "$cxx_std" \
+                        "$bld_type" \
+                        "$combo_label" \
+                        "${combo_flags[@]+"${combo_flags[@]}"}"
+                else
+                    enqueue_job \
+                        "$cxx" \
+                        "$cxx_ver_tag" \
+                        "$cxx_std" \
+                        "$bld_type" \
+                        "$combo_label" \
+                        "${combo_flags[@]+"${combo_flags[@]}"}"
+                fi
             done
         done
     done
 done
+
+# Drain the pool: wait for all background jobs, redrawing a status line once
+# per second based on the counts of per-job .status files.
+wait_with_progress() {
+    while true; do
+        local pending=0 running=0 passed=0 failed=0
+        local sf
+        for sf in "${logdir}"/*.status; do
+            [[ -e "$sf" ]] || continue
+            local s
+            s=$(< "$sf")
+            case "$s" in
+                PENDING)          (( pending++ )) || true ;;
+                RUNNING)          (( running++ )) || true ;;
+                PASS)             (( passed++  )) || true ;;
+                *)                (( failed++  )) || true ;;
+            esac
+        done
+        if [[ $running -eq 0 ]]; then
+            [[ $pending -eq 0 ]] && break
+            [[ -e "${abort_flag}" ]] && break
+        fi
+        [[ -t 1 ]] && printf '\r\033[K\033[2m[build_matrix] pending: %d  running: %d  passed: %d  failed: %d\033[0m' \
+            "$pending" "$running" "$passed" "$failed"
+        sleep 1
+    done
+    [[ -t 1 ]] && printf '\r\033[K'
+    wait
+}
+
+if [[ $dry_run -eq 0 ]]; then
+    wait_with_progress
+fi
+
+# Close the semaphore fd
+exec 3>&-
+
+# Tally results from individual per-job status files
+pass=0
+fail=0
+declare -a failures=()
+for _sf in "${logdir}"/*.status; do
+    [[ -e "$_sf" ]] || continue
+    IFS= read -r line < "$_sf"
+    rm -f "${_sf}"
+    case "$line" in
+        PASS)                 (( pass++ )) || true ;;
+        CONFIGURE_FAIL\ *)    (( fail++ )) || true; failures+=("CONFIGURE ${line#CONFIGURE_FAIL }") ;;
+        BUILD_FAIL\ *)        (( fail++ )) || true; failures+=("BUILD ${line#BUILD_FAIL }") ;;
+        TEST_FAIL\ *)         (( fail++ )) || true; failures+=("TEST ${line#TEST_FAIL }") ;;
+        ABORTED\ *)           (( fail++ )) || true; failures+=("ABORTED ${line#ABORTED }") ;;
+        PENDING|RUNNING)      (( fail++ )) || true; failures+=("ABORTED ${_sf##*/}") ;;
+    esac
+done
+
+rm -f "${sem_fifo}"
 
 # Summary
 echo ""
