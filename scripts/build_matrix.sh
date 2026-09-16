@@ -11,8 +11,11 @@
 #   --std N          Only use exactly this C++ standard; compilers that do not
 #                    support it are skipped entirely (e.g. --std 20).
 #   --std-min N      Skip C++ standards older than N (e.g. --std-min 17).
-#   --latest-only    Only use the latest available version of each compiler
+#   --comp-latest    Only use the latest available version of each compiler
 #                    family (gcc and clang) instead of all installed versions.
+#   --comp C         Add a specific compiler by its family-major identifier
+#                    (e.g. --comp gcc-12). Can be specified multiple times
+#                    and with --comp-latest.
 #   --asan           Enable address sanitizer for every combination
 #                    (defaults --build-type to "Debug"; mutually exclusive with --tsan).
 #   --tsan           Enable thread sanitizer for every combination
@@ -34,7 +37,10 @@
 #                    every combination, wiping it between runs.  Without this
 #                    flag each combination gets its own directory under
 #                    build/<compiler>-<ver>/<cppstd>/<cmake-tuple>/
-#   --dry-run        Print every command that would be run without executing.
+#   --wait-for-dedup Wait for deduplication to complete before exiting.
+#                    If not specified, script exits immediately after builds finish.
+#   --no-build       Discover compilers and stop.
+#   --dry-run        Print commands that would be run without executing.
 #   -h, --help       Show this help and exit.
 
 set -euo pipefail
@@ -44,11 +50,32 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "${script_dir}/.." && pwd)"
 readonly script_dir repo_root
 
+# CMake option combinations (Linux-meaningful)
+# Each entry: "label [-DFOO=x ...]"
+declare -a option_combos=(
+    "baseline"
+    "shared -DSPDLOG_BUILD_SHARED=ON"
+    "pch -DSPDLOG_ENABLE_PCH=ON"
+    "pic -DSPDLOG_BUILD_PIC=ON"
+    "std_format -DSPDLOG_USE_STD_FORMAT=ON"         # C++20+; filtered below
+    "poly_alloc -DSPDLOG_POLYMORPHIC_ALLOCATORS=ON" # C++17+; filtered below
+    "no_exceptions -DSPDLOG_NO_EXCEPTIONS=ON"
+    "clock_coarse -DSPDLOG_CLOCK_COARSE=ON"
+    "prevent_child_fd -DSPDLOG_PREVENT_CHILD_FD=ON"
+    "no_thread_id -DSPDLOG_NO_THREAD_ID=ON"
+    "no_tls -DSPDLOG_NO_TLS=ON"
+    "no_atomic_levels -DSPDLOG_NO_ATOMIC_LEVELS=ON"
+    "no_default_logger -DSPDLOG_DISABLE_DEFAULT_LOGGER=ON"
+    "no_fwrite_unlocked -DSPDLOG_FWRITE_UNLOCKED=OFF"
+    "no_tz_offset -DSPDLOG_NO_TZ_OFFSET=ON"
+)
+
 # Defaults
 reuse_dir=0
 rebuild=0
 rebuild_deps=0
-latest_only=0
+comp_latest=0
+declare -a comp_explicit=()
 build_types=("Debug" "Release")
 build_types_explicit=0
 jobs=$(nproc 2>/dev/null || echo 4)
@@ -57,6 +84,8 @@ std_only=""   # if set, only this standard is tried
 sanitizer=""  # "asan" | "tsan" | ""
 keep_going=0
 dry_run=0
+no_build=0
+wait_for_dedup=0
 
 # Argument parsing
 while [[ $# -gt 0 ]]; do
@@ -64,7 +93,8 @@ while [[ $# -gt 0 ]]; do
         --reuse-dir)    reuse_dir=1 ;;
         --rebuild)      rebuild=1 ;;
         --rebuild-deps) rebuild=1; rebuild_deps=1 ;;
-        --latest-only)  latest_only=1 ;;
+        --comp-latest)  comp_latest=1 ;;
+        --comp)         shift; comp_explicit+=("$1") ;;
         --std-min)      shift; std_min="$1" ;;
         --std)          shift; std_only="$1" ;;
         --build-type)   shift; read -ra build_types <<< "$1"; build_types_explicit=1 ;;
@@ -73,6 +103,8 @@ while [[ $# -gt 0 ]]; do
         --tsan)         sanitizer+="tsan" ;;
         --keep-going)   keep_going=1 ;;
         --dry-run)      dry_run=1 ;;
+        --no-build)     no_build=1 ;;
+        --wait-for-dedup) wait_for_dedup=1 ;;
         -h|--help)
             awk '/^#!/{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
             exit 0
@@ -145,6 +177,12 @@ compiler_id() {
               | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
         echo "gcc ${ver%%.*}"
     fi
+}
+
+# Prints the full version (e.g. "12.3.0", "15.0.6") from the first line of --version output.
+compiler_full_ver() {
+    local bin="$1"
+    $bin --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1
 }
 
 # Keeps only the highest-versioned binary per compiler family (gcc / clang).
@@ -269,9 +307,9 @@ build_one() {
         -DSPDLOG_BUILD_EXAMPLE=ON
         -DSPDLOG_BUILD_EXAMPLE_HO=ON
         -DSPDLOG_BUILD_WARNINGS=ON
-        -DSPDLOG_BUILD_BENCH=OFF
+        -DSPDLOG_BUILD_BENCH=ON
         -DSPDLOG_BUILD_TESTS=ON
-        -DSPDLOG_BUILD_TESTS_HO=OFF
+        -DSPDLOG_BUILD_TESTS_HO=ON
         "${ccache_flags[@]+"${ccache_flags[@]}"}"
         "${san_flags[@]+"${san_flags[@]}"}"
         "$@"
@@ -407,39 +445,62 @@ enqueue_job() {
     ) &
 }
 
-# CMake option combinations (Linux-meaningful)
-# Each entry: "label [-DFOO=x ...]"
-declare -a option_combos=(
-    "baseline"
-    "shared -DSPDLOG_BUILD_SHARED=ON"
-    "pch -DSPDLOG_ENABLE_PCH=ON"
-    "pic -DSPDLOG_BUILD_PIC=ON"
-    "std_format -DSPDLOG_USE_STD_FORMAT=ON"         # C++20+; filtered below
-    "poly_alloc -DSPDLOG_POLYMORPHIC_ALLOCATORS=ON" # C++17+; filtered below
-    "no_exceptions -DSPDLOG_NO_EXCEPTIONS=ON"
-    "clock_coarse -DSPDLOG_CLOCK_COARSE=ON"
-    "prevent_child_fd -DSPDLOG_PREVENT_CHILD_FD=ON"
-    "no_thread_id -DSPDLOG_NO_THREAD_ID=ON"
-    "no_tls -DSPDLOG_NO_TLS=ON"
-    "no_atomic_levels -DSPDLOG_NO_ATOMIC_LEVELS=ON"
-    "no_default_logger -DSPDLOG_DISABLE_DEFAULT_LOGGER=ON"
-    "no_fwrite_unlocked -DSPDLOG_FWRITE_UNLOCKED=OFF"
-    "no_tz_offset -DSPDLOG_NO_TZ_OFFSET=ON"
-)
-
-declare -a compilers=()
-discover_compilers compilers
-if [[ ${#compilers[@]} -eq 0 ]]; then
+declare -a _discovered=()
+discover_compilers _discovered
+if [[ ${#_discovered[@]} -eq 0 ]]; then
     echo "No g++ or clang++ compilers found." >&2
     exit 1
 fi
 
-if [[ $latest_only -eq 1 ]]; then
-    declare -a _filtered=()
-    filter_latest_compilers compilers _filtered
-    compilers=("${_filtered[@]}")
-    unset _filtered
+# Build the working compiler list from _discovered according to options.
+# --comp-latest seeds it with one binary per family; --comp appends specific
+# entries resolved from _discovered; neither means use all of _discovered.
+declare -a compilers=()
+
+if [[ $comp_latest -eq 1 ]]; then
+    filter_latest_compilers _discovered compilers
 fi
+
+# Resolve each --comp family-major spec against the full _discovered list.
+for _spec in "${comp_explicit[@]+"${comp_explicit[@]}"}"; do
+    _found=""
+    for _cxx in "${_discovered[@]}"; do
+        read -r _f _v <<< "$(compiler_id "$_cxx")"
+        if [[ "${_f}-${_v}" == "$_spec" ]]; then
+            _found="$_cxx"
+            break
+        fi
+    done
+    if [[ -z "$_found" ]]; then
+        echo "Error: --comp ${_spec}: no installed compiler matched" >&2
+        exit 1
+    fi
+    compilers+=("$_found")
+done
+unset _spec _cxx _f _v _found
+
+# If no filtering options were given, use all discovered compilers.
+if [[ $comp_latest -eq 0 ]] && [[ ${#comp_explicit[@]} -eq 0 ]]; then
+    compilers=("${_discovered[@]}")
+fi
+unset _discovered
+
+# Deduplicate by compiler family+major (e.g. clang++ and clang++-22 that
+# resolve to the same clang-22 identity are collapsed to the first entry seen),
+# then sort by family name then version number.
+declare -a _keyed=()
+declare -A _seen_ids=()
+for _cxx in "${compilers[@]}"; do
+    _id=$(compiler_id "$_cxx")
+    if [[ -z "${_seen_ids[$_id]+set}" ]]; then
+        _seen_ids[$_id]=1
+        _keyed+=("${_id} ${_cxx}")  # "gcc 12 g++-12"
+    fi
+done
+mapfile -t compilers < <(
+    printf '%s\n' "${_keyed[@]}" | sort -k1,1 -k2,2n | cut -d' ' -f3-
+)
+unset _keyed _seen_ids _cxx _id
 
 log "Found compilers: ${compilers[*]}"
 log "Build types: ${build_types[*]}"
@@ -463,7 +524,9 @@ for cxx in "${compilers[@]}"; do
         continue
     fi
     read -ra standards <<< "$standards_str"
-    log "${cxx_ver_tag}: C++ standards supported: ${standards[*]}"
+    log "${cxx_ver_tag} ($(compiler_full_ver "$cxx")): C++ standards supported: ${standards[*]}"
+
+    [[ $no_build -eq 1 ]] && continue
 
     if [[ -n "$std_only" ]]; then
         # Skip the compiler entirely if it doesn't support that standard
@@ -610,14 +673,20 @@ echo "=================================================================="
 echo ""
 
 # Postprocessing: Deduplicate _deps across build directories
-if [[ $dry_run -eq 0 ]] && [[ $reuse_dir -eq 0 ]] && command -v jdupes &>/dev/null; then
+if [[ $no_build -eq 0 ]] && [[ $dry_run -eq 0 ]] && [[ $reuse_dir -eq 0 ]] && command -v jdupes &>/dev/null; then
     mapfile -t _deps_dirs < <(
         find "${repo_root}/build" -type d -name '_deps' 2>/dev/null
     )
     if [[ ${#_deps_dirs[@]} -gt 1 ]]; then
-        log "Deduplicating ${#_deps_dirs[@]} _deps directories with jdupes..."
-        jdupes --recurse --one-file-system --dedupe "${_deps_dirs[@]}" >/dev/null \
-            || log "Warning: jdupes deduplication failed (non-fatal)"
+        if [[ $wait_for_dedup -eq 1 ]]; then
+            log "Deduplicating ${#_deps_dirs[@]} _deps directories with jdupes..."
+            jdupes --recurse --one-file-system --dedupe "${_deps_dirs[@]}" >/dev/null \
+                || log "Warning: jdupes deduplication failed (non-fatal)"
+        else
+            log "Deduplicating ${#_deps_dirs[@]} _deps directories with jdupes in background"
+            jdupes --recurse --one-file-system --dedupe --quiet "${_deps_dirs[@]}" >/dev/null 2>&1 &
+            disown
+        fi
     fi
     unset _deps_dirs
 fi
