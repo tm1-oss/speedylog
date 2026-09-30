@@ -459,16 +459,26 @@ for (( _i=0; _i<jobs; _i++ )); do printf '\n' >&3; done
 # abort_flag is set when a worker fails and keep_going=0, or on SIGINT
 readonly abort_flag="${logdir}/abort"
 
+# PIDs of all background workers
+declare -a worker_pids=()
+
 # On SIGINT: set the abort flag, then flood the semaphore FIFO to unblock all jobs;
 # already-running jobs are left to finish.
 trap '
     echo ""
-    log "Interrupted - waiting for in-flight jobs to finish..."
-    touch "${abort_flag}"
-    for (( _s=0; _s<=jobs; _s++ )); do printf "\n" >&3; done
-    wait_with_progress
-    log "Done."
-    exit 130
+    if [ -e "${abort_flag}" ]; then
+        log "Interrupted again - terminating in-flight jobs..."
+        kill "${worker_pids[@]}" 2>/dev/null || true
+        wait
+        exit 130
+    else
+        log "Interrupted - waiting for in-flight jobs to finish. Interrupt again to terminate them..."
+        touch "${abort_flag}"
+        for (( _s=0; _s<=jobs; _s++ )); do printf "\n" >&3; done
+        wait_with_progress
+        log "Done."
+        exit 130
+    fi
 ' INT
 
 # Enqueue one combination as a background worker.
@@ -513,6 +523,7 @@ enqueue_job() {
 
         log "FINISHED ${status_word}  ${label}  (${_elapsed}s)  ->  ${log_file#"${repo_root}/"}"
     ) &
+    worker_pids+=($!)
 }
 
 declare -a _discovered=()
