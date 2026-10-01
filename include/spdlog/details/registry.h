@@ -116,7 +116,7 @@ private:
     void throw_if_exists_(const string_type &logger_name);
     void register_logger_(std::shared_ptr<basic_logger<Alloc>> new_logger);
     void register_or_replace_(std::shared_ptr<basic_logger<Alloc>> new_logger);
-    bool set_level_from_cfg_(basic_logger<Alloc> *logger);
+
     std::mutex logger_map_mutex_, flusher_mutex_;
     std::recursive_mutex tp_mutex_;
     std::unordered_map<string_type, std::shared_ptr<basic_logger<Alloc>>> loggers_;
