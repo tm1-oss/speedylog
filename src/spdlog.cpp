@@ -38,12 +38,15 @@ template SPDLOG_API void spdlog::swap<spdlog::default_allocator_t>(
 // These classes are all implicitly instantiated by the registry<Alloc> constructor.
 // The lines below are kept without SPDLOG_API to force emission of all method bodies into this TU;
 // the visibility("default") from SPDLOG_API on each class definition in the header is sufficient
-// to export them from the shared library.
-template class spdlog::sinks::sink<spdlog::default_allocator_t>;
-template class spdlog::details::registry<spdlog::default_allocator_t>;
-template class spdlog::basic_pattern_formatter<spdlog::default_allocator_t>;
-template class spdlog::basic_logger<spdlog::default_allocator_t>;
-template class spdlog::details::backtracer<spdlog::default_allocator_t>;
+// to export them from the shared library. OTOH in Win32, they still require dllexport.
+template class SPDLOG_INSTANTIATED_TEMPLATE_API spdlog::sinks::sink<spdlog::default_allocator_t>;
+template class SPDLOG_INSTANTIATED_TEMPLATE_API
+    spdlog::details::registry<spdlog::default_allocator_t>;
+template class SPDLOG_INSTANTIATED_TEMPLATE_API
+    spdlog::basic_pattern_formatter<spdlog::default_allocator_t>;
+template class SPDLOG_INSTANTIATED_TEMPLATE_API spdlog::basic_logger<spdlog::default_allocator_t>;
+template class SPDLOG_INSTANTIATED_TEMPLATE_API
+    spdlog::details::backtracer<spdlog::default_allocator_t>;
 
 #ifdef SPDLOG_POLYMORPHIC_ALLOCATORS
 #include <memory_resource>
