@@ -171,6 +171,15 @@ if(NOT SPDLOG_USE_STD_FORMAT AND NOT SPDLOG_FMT_EXTERNAL AND NOT SPDLOG_FMT_EXTE
 endif()
 
 if(SPDLOG_BUILD_SHARED OR BUILD_SHARED_LIBS)
+    if(MSVC)
+        if(MSVC_VERSION LESS 1920)
+            message(FATAL_ERROR "Building speedylog as a shared library with MSVC requires Visual Studio 16 2019 (MSVC 19.20+) or newer.")
+        endif()
+        if(CMAKE_CXX_STANDARD LESS 14)
+            message(FATAL_ERROR "Building speedylog as a shared library with MSVC requires C++14 or newer (CMAKE_CXX_STANDARD >= 14).")
+        endif()
+    endif()
+
     if(WIN32)
         configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc @ONLY)
         list(APPEND SPDLOG_SRCS ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
