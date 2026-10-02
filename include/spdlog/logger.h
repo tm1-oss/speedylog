@@ -417,3 +417,16 @@ using logger = basic_logger<default_allocator_t>;
 #ifdef SPDLOG_HEADER_ONLY
 #include "logger-inl.h"
 #endif
+
+// Suppress implicit instantiation of basic_logger<default_allocator_t> in every consumer TU.
+// Without these declarations every .obj would instantiate the inline methods locally, then
+// collide with the dllexport copies emitted by src/spdlog.cpp (LNK2005 on Windows).
+// The extern template must only appear on the consumer side: combining it with dllexport
+// (which is active while building the DLL itself) is ill-formed (MSVC C4910).
+#if defined(SPDLOG_COMPILED_LIB) && !defined(speedylog_EXPORTS)
+extern template class SPDLOG_INSTANTIATED_TEMPLATE_API
+    spdlog::basic_logger<spdlog::default_allocator_t>;
+extern template SPDLOG_API void spdlog::swap<spdlog::default_allocator_t>(
+    spdlog::basic_logger<spdlog::default_allocator_t> &,
+    spdlog::basic_logger<spdlog::default_allocator_t> &);
+#endif
