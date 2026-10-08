@@ -60,7 +60,7 @@ declare -a option_combos=(
     "pch -DSPDLOG_ENABLE_PCH=ON"
     "pic -DSPDLOG_BUILD_PIC=ON"
     "std_format -DSPDLOG_USE_STD_FORMAT=ON"         # C++20+; filtered below
-    "poly_alloc -DSPDLOG_POLYMORPHIC_ALLOCATORS=ON" # C++17+; filtered below
+    "poly_alloc+shared -DSPDLOG_POLYMORPHIC_ALLOCATORS=ON -DSPDLOG_BUILD_SHARED=ON" # C++17+; filtered below
     "no_exceptions -DSPDLOG_NO_EXCEPTIONS=ON"
     "clock_coarse -DSPDLOG_CLOCK_COARSE=ON"
     "prevent_child_fd -DSPDLOG_PREVENT_CHILD_FD=ON"
