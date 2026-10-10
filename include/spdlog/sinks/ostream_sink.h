@@ -6,24 +6,30 @@
 #include <spdlog/details/null_mutex.h>
 #include <spdlog/sinks/base_sink.h>
 
+#include <memory>
 #include <mutex>
 #include <ostream>
 
 namespace spdlog {
 namespace sinks {
-template <typename Mutex>
-class ostream_sink final : public base_sink<Mutex> {
+template <typename Mutex, class Alloc = default_allocator_t>
+class ostream_sink final : public base_sink<Mutex, Alloc> {
 public:
-    explicit ostream_sink(std::ostream &os, bool force_flush = false)
-        : ostream_(os),
+    using allocator_type = Alloc;
+
+    ostream_sink(std::ostream &os, bool force_flush, Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc),
+          ostream_(os),
           force_flush_(force_flush) {}
+    explicit ostream_sink(std::ostream &os, Alloc alloc = Alloc())
+        : ostream_sink(os, false, alloc) {}
     ostream_sink(const ostream_sink &) = delete;
     ostream_sink &operator=(const ostream_sink &) = delete;
 
 protected:
     void sink_it_(const details::log_msg &msg) override {
-        memory_buf_t formatted;
-        base_sink<Mutex>::formatter_->format(msg, formatted);
+        basic_memory_buf_t<Alloc> formatted(this->get_allocator());
+        base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
         ostream_.write(formatted.data(), static_cast<std::streamsize>(formatted.size()));
         if (force_flush_) {
             ostream_.flush();

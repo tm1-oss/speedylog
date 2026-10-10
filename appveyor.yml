@@ -22,22 +22,23 @@ environment:
       CXX_STANDARD: 11
     - GENERATOR: '"Visual Studio 15 2017 Win64"'
       BUILD_TYPE: Release
-      BUILD_SHARED: 'ON'
-      FATAL_ERRORS: 'OFF'
-      WCHAR: 'OFF'
-      WCHAR_FILES: 'OFF'
-      BUILD_EXAMPLE: 'ON'
-      USE_STD_FORMAT: 'OFF'
-      CXX_STANDARD: 11
-    - GENERATOR: '"Visual Studio 15 2017 Win64"'
-      BUILD_TYPE: Release
-      BUILD_SHARED: 'ON'
+      BUILD_SHARED: 'OFF'
       FATAL_ERRORS: 'OFF'
       WCHAR: 'ON'
       WCHAR_FILES: 'ON'
       BUILD_EXAMPLE: 'OFF'
       USE_STD_FORMAT: 'OFF'
       CXX_STANDARD: 11
+    - GENERATOR: '"Visual Studio 16 2019" -A x64'
+      BUILD_TYPE: Release
+      BUILD_SHARED: 'ON'
+      FATAL_ERRORS: 'ON'
+      WCHAR: 'OFF'
+      WCHAR_FILES: 'OFF'
+      BUILD_EXAMPLE: 'OFF'
+      USE_STD_FORMAT: 'OFF'
+      CXX_STANDARD: 14
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
     - GENERATOR: '"Visual Studio 16 2019" -A x64'
       BUILD_TYPE: Release
       BUILD_SHARED: 'ON'

@@ -24,6 +24,15 @@ $ cmake .. && cmake --build .
 ```
 see example [CMakeLists.txt](example/CMakeLists.txt) on how to use.
 
+## Compatibility
+
+| Platform / Mode | Minimum Compiler Version | Minimum C++ Standard |
+| --- | --- | --- |
+| **GCC** (Static / Shared / Header-only) | GCC 4.8.1+ | C++11 |
+| **Clang** (Static / Shared / Header-only) | Clang 3.5+ | C++11 |
+| **MSVC** (Static / Header-only) | Visual Studio 2013+ | C++11 |
+| **MSVC** (Shared) | Visual Studio 16 2019+ | C++14 |
+
 ## Features
 * Very fast (see [benchmarks](#benchmarks) below).
 * Headers only or compiled

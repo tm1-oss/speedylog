@@ -12,9 +12,24 @@
 
 #include <mutex>
 
-template class SPDLOG_API spdlog::sinks::basic_file_sink<std::mutex>;
-template class SPDLOG_API spdlog::sinks::basic_file_sink<spdlog::details::null_mutex>;
+template class SPDLOG_API spdlog::sinks::basic_file_sink<std::mutex, spdlog::default_allocator_t>;
+template class SPDLOG_API
+    spdlog::sinks::basic_file_sink<spdlog::details::null_mutex, spdlog::default_allocator_t>;
 
 #include <spdlog/sinks/rotating_file_sink-inl.h>
-template class SPDLOG_API spdlog::sinks::rotating_file_sink<std::mutex>;
-template class SPDLOG_API spdlog::sinks::rotating_file_sink<spdlog::details::null_mutex>;
+template class SPDLOG_API
+    spdlog::sinks::rotating_file_sink<std::mutex, spdlog::default_allocator_t>;
+template class SPDLOG_API
+    spdlog::sinks::rotating_file_sink<spdlog::details::null_mutex, spdlog::default_allocator_t>;
+
+#ifdef SPDLOG_POLYMORPHIC_ALLOCATORS
+#include <memory_resource>
+template class SPDLOG_API
+    spdlog::sinks::basic_file_sink<std::mutex, std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::basic_file_sink<spdlog::details::null_mutex,
+                                                         std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API
+    spdlog::sinks::rotating_file_sink<std::mutex, std::pmr::polymorphic_allocator<char>>;
+template class SPDLOG_API spdlog::sinks::rotating_file_sink<spdlog::details::null_mutex,
+                                                            std::pmr::polymorphic_allocator<char>>;
+#endif

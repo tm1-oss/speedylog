@@ -22,6 +22,13 @@ std::string filename_buf_to_utf8string(const filename_memory_buf_t &w) {
 }
 #endif
 
+TEST_CASE("UTF8 conversion", "[daily_logger]") {
+    filename_memory_buf_t w;
+    spdlog::fmt_lib::format_to(std::back_inserter(w), SPDLOG_FILENAME_T("abc") );
+    CAPTURE(w);
+    CHECK(filename_buf_to_utf8string(w) == "abc");
+}
+
 TEST_CASE("daily_logger with dateonly calculator", "[daily_logger]") {
     using sink_type =
         spdlog::sinks::daily_file_sink<std::mutex, spdlog::sinks::daily_filename_calculator>;

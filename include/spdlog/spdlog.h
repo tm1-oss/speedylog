@@ -30,10 +30,21 @@ using default_factory = synchronous_factory;
 //
 // Example:
 //   spdlog::create<daily_file_sink_st>("logger_name", "dailylog_filename", 11, 59);
-template <typename Sink, typename... SinkArgs>
+template <
+    typename Sink,
+    typename... SinkArgs,
+    typename std::enable_if<!std::uses_allocator<Sink, default_allocator_t>::value, int>::type = 0>
 inline std::shared_ptr<spdlog::logger> create(std::string logger_name, SinkArgs &&...sink_args) {
     return default_factory::create<Sink>(std::move(logger_name),
                                          std::forward<SinkArgs>(sink_args)...);
+}
+template <
+    typename Sink,
+    typename... SinkArgs,
+    typename std::enable_if<std::uses_allocator<Sink, default_allocator_t>::value, int>::type = 0>
+inline std::shared_ptr<spdlog::logger> create(std::string logger_name, SinkArgs &&...sink_args) {
+    return default_factory::create<Sink>(
+        std::move(logger_name), std::forward<SinkArgs>(sink_args)..., default_allocator_t());
 }
 
 // Initialize and register a logger,
@@ -52,7 +63,8 @@ SPDLOG_API void initialize_logger(std::shared_ptr<logger> logger);
 SPDLOG_API std::shared_ptr<logger> get(const std::string &name);
 
 // Set global formatter. Each sink in each logger will get a clone of this object
-SPDLOG_API void set_formatter(std::unique_ptr<spdlog::formatter> formatter);
+SPDLOG_API void set_formatter(
+    std::unique_ptr<spdlog::basic_formatter<default_allocator_t>> formatter);
 
 // Set global format string.
 // example: spdlog::set_pattern("%Y-%m-%d %H:%M:%S.%e %l : %v");
@@ -84,7 +96,7 @@ SPDLOG_API void flush_on(level::level_enum log_level);
 // Warning: Use only if all your loggers are thread safe!
 template <typename Rep, typename Period>
 inline void flush_every(std::chrono::duration<Rep, Period> interval) {
-    details::registry::instance().flush_every(interval);
+    details::registry<>::instance().flush_every(interval);
 }
 
 // Set global error handler

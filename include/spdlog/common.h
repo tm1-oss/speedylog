@@ -31,15 +31,20 @@
 #if defined(_WIN32)
 #ifdef speedylog_EXPORTS
 #define SPDLOG_API __declspec(dllexport)
+#define SPDLOG_INSTANTIATED_TEMPLATE_API __declspec(dllexport)
 #else  // !speedylog_EXPORTS
 #define SPDLOG_API __declspec(dllimport)
+#define SPDLOG_INSTANTIATED_TEMPLATE_API __declspec(dllimport)
 #endif
 #else  // !defined(_WIN32)
 #define SPDLOG_API __attribute__((visibility("default")))
-#endif
-#else  // !defined(SPDLOG_SHARED_LIB)
+#define SPDLOG_INSTANTIATED_TEMPLATE_API
+#endif  // !defined(_WIN32)
+#else   // !defined(SPDLOG_SHARED_LIB)
 #define SPDLOG_API
-#endif
+#define SPDLOG_INSTANTIATED_TEMPLATE_API
+#endif  // SPDLOG_COMPILED_LIB
+
 #define SPDLOG_INLINE
 #else  // !defined(SPDLOG_COMPILED_LIB)
 #define SPDLOG_API
@@ -68,6 +73,44 @@
 #else
 #define SPDLOG_NOEXCEPT noexcept
 #define SPDLOG_CONSTEXPR constexpr
+#endif
+
+// `if constexpr` is a C++17 feature, for earlier versions fallback to regular `if`
+#if __cplusplus >= 201703L
+#define SPDLOG_IF_CONSTEXPR if constexpr
+#else
+#define SPDLOG_IF_CONSTEXPR if
+#endif
+
+// Conditional noexcept for allocator-extended move ctor (C++17 and later).
+// An allocator-extended move is noexcept when the specified allocator is the same
+// as the allocator of the source.
+#if __cplusplus >= 201703L
+#define SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Allocator) \
+    noexcept(std::allocator_traits<Allocator>::is_always_equal::value)
+#else
+#define SPDLOG_ALLOC_MOVE_EXT_NOEXCEPT(Allocator)
+#endif
+
+// Conditional noexcept for allocator-aware move-assignment (C++17 and later).
+// A move-assignment is noexcept when the allocator either propagates on move or is the same
+#if __cplusplus >= 201703L
+#define SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Allocator)                                            \
+    noexcept(std::allocator_traits<Allocator>::propagate_on_container_move_assignment::value || \
+             std::allocator_traits<Allocator>::is_always_equal::value)
+#else
+#define SPDLOG_ALLOC_MOVE_ASSIGN_NOEXCEPT(Allocator)
+#endif
+
+// Conditional noexcept for allocator-aware swap (C++17 and later).
+// An allocator-aware swap is noexcept when the allocator either propagates on
+// swap (propagate_on_container_swap) or is always equal (is_always_equal).
+#if __cplusplus >= 201703L
+#define SPDLOG_ALLOC_SWAP_NOEXCEPT(Allocator)                                        \
+    noexcept(std::allocator_traits<Allocator>::propagate_on_container_swap::value || \
+             std::allocator_traits<Allocator>::is_always_equal::value)
+#else
+#define SPDLOG_ALLOC_SWAP_NOEXCEPT(Allocator)
 #endif
 
 // If building with std::format, can just use constexpr, otherwise if building with fmt
@@ -122,9 +165,13 @@
 
 namespace spdlog {
 
-class formatter;
+using default_allocator_t = std::allocator<char>;
+
+template <class Alloc>
+class basic_formatter;
 
 namespace sinks {
+template <class Alloc>
 class sink;
 }
 
@@ -139,14 +186,20 @@ using filename_t = std::string;
 #endif
 
 using log_clock = std::chrono::system_clock;
-using sink_ptr = std::shared_ptr<sinks::sink>;
-using sinks_init_list = std::initializer_list<sink_ptr>;
+template <class Alloc = default_allocator_t>
+using sink_ptr = std::shared_ptr<sinks::sink<Alloc>>;
+template <class Alloc>
+using sinks_init_list = std::initializer_list<sink_ptr<Alloc>>;
 using err_handler = std::function<void(const std::string &err_msg)>;
+
 #ifdef SPDLOG_USE_STD_FORMAT
+
 namespace fmt_lib = std;
 
 using string_view_t = std::string_view;
-using memory_buf_t = std::string;
+
+template <class Alloc>
+using basic_memory_buf_t = std::basic_string<char, std::char_traits<char>, Alloc>;
 
 template <typename... Args>
 #if __cpp_lib_format >= 202207L
@@ -169,13 +222,17 @@ using wformat_string_t = std::wformat_string<Args...>;
 #else
 using wformat_string_t = std::wstring_view;
 #endif
-#endif
+#endif  // defined(SPDLOG_WCHAR_FILENAMES) || defined(SPDLOG_WCHAR_TO_UTF8_SUPPORT)
 #define SPDLOG_BUF_TO_STRING(x) x
+
 #else  // use fmt lib instead of std::format
+
 namespace fmt_lib = fmt;
 
 using string_view_t = fmt::basic_string_view<char>;
-using memory_buf_t = fmt::basic_memory_buffer<char, 250>;
+
+template <class Alloc>
+using basic_memory_buf_t = fmt::basic_memory_buffer<char, 250, Alloc>;
 
 template <typename... Args>
 using format_string_t = fmt::format_string<Args...>;
@@ -188,7 +245,7 @@ template <typename Char>
 using fmt_runtime_string = fmt::runtime_format_string<Char>;
 #else
 using fmt_runtime_string = fmt::basic_runtime<Char>;
-#endif
+#endif  // FMT_VERSION >= 90101
 
 // clang doesn't like SFINAE disabled constructor in std::is_convertible<> so have to repeat the
 // condition from basic_format_string here, in addition, fmt::basic_runtime<Char> is only
@@ -206,9 +263,12 @@ using wmemory_buf_t = fmt::basic_memory_buffer<wchar_t, 250>;
 
 template <typename... Args>
 using wformat_string_t = fmt::wformat_string<Args...>;
-#endif
-#define SPDLOG_BUF_TO_STRING(x) fmt::to_string(x)
-#endif
+#endif  // defined(SPDLOG_WCHAR_FILENAMES) || defined(SPDLOG_WCHAR_TO_UTF8_SUPPORT)
+#define SPDLOG_BUF_TO_STRING(x) std::string{(x).begin(),(x).end()}
+
+#endif  // SPDLOG_USE_STD_FORMAT
+
+using memory_buf_t = basic_memory_buf_t<default_allocator_t>;
 
 #ifdef SPDLOG_WCHAR_TO_UTF8_SUPPORT
 #ifndef _WIN32
@@ -262,18 +322,15 @@ enum level_enum : int {
 #define SPDLOG_LEVEL_NAME_OFF spdlog::string_view_t("off", 3)
 
 #if !defined(SPDLOG_LEVEL_NAMES)
-#define SPDLOG_LEVEL_NAMES                                                                  \
-    {                                                                                       \
-        SPDLOG_LEVEL_NAME_TRACE, SPDLOG_LEVEL_NAME_DEBUG, SPDLOG_LEVEL_NAME_INFO,           \
-            SPDLOG_LEVEL_NAME_WARNING, SPDLOG_LEVEL_NAME_ERROR, SPDLOG_LEVEL_NAME_CRITICAL, \
-            SPDLOG_LEVEL_NAME_OFF                                                           \
-    }
+#define SPDLOG_LEVEL_NAMES                                                           \
+    {SPDLOG_LEVEL_NAME_TRACE,   SPDLOG_LEVEL_NAME_DEBUG, SPDLOG_LEVEL_NAME_INFO,     \
+     SPDLOG_LEVEL_NAME_WARNING, SPDLOG_LEVEL_NAME_ERROR, SPDLOG_LEVEL_NAME_CRITICAL, \
+     SPDLOG_LEVEL_NAME_OFF}
 #endif
 
 #if !defined(SPDLOG_SHORT_LEVEL_NAMES)
 
-#define SPDLOG_SHORT_LEVEL_NAMES \
-    { "T", "D", "I", "W", "E", "C", "O" }
+#define SPDLOG_SHORT_LEVEL_NAMES {"T", "D", "I", "W", "E", "C", "O"}
 #endif
 
 SPDLOG_API const string_view_t &to_string_view(spdlog::level::level_enum l) SPDLOG_NOEXCEPT;
@@ -342,7 +399,8 @@ namespace details {
 
 // to_string_view
 
-SPDLOG_CONSTEXPR_FUNC spdlog::string_view_t to_string_view(const memory_buf_t &buf)
+template <class Alloc>
+SPDLOG_CONSTEXPR_FUNC spdlog::string_view_t to_string_view(const basic_memory_buf_t<Alloc> &buf)
     SPDLOG_NOEXCEPT {
     return spdlog::string_view_t{buf.data(), buf.size()};
 }

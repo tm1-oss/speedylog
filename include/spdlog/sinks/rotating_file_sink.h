@@ -17,15 +17,28 @@ namespace sinks {
 //
 // Rotating file sink based on size
 //
-template <typename Mutex>
-class rotating_file_sink final : public base_sink<Mutex> {
+template <typename Mutex, class Alloc = default_allocator_t>
+class rotating_file_sink final : public base_sink<Mutex, Alloc> {
 public:
     static constexpr size_t MaxFiles = 200000;
+    using allocator_type = Alloc;
+
     rotating_file_sink(filename_t base_filename,
                        std::size_t max_size,
                        std::size_t max_files,
-                       bool rotate_on_open = false,
-                       const file_event_handlers &event_handlers = {});
+                       bool rotate_on_open,
+                       const file_event_handlers &event_handlers,
+                       Alloc alloc = Alloc());
+    rotating_file_sink(filename_t base_filename,
+                       std::size_t max_size,
+                       std::size_t max_files,
+                       bool rotate_on_open,
+                       Alloc alloc = Alloc());
+    rotating_file_sink(filename_t base_filename,
+                       std::size_t max_size,
+                       std::size_t max_files,
+                       Alloc alloc = Alloc());
+
     static filename_t calc_filename(const filename_t &filename, std::size_t index);
     filename_t filename();
     void rotate_now();

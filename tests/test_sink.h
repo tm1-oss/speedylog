@@ -9,42 +9,52 @@
 #include "spdlog/sinks/base_sink.h"
 #include "spdlog/fmt/fmt.h"
 #include <chrono>
+#include <memory>
 #include <mutex>
+#include <string>
 #include <thread>
+#include <vector>
 
 namespace spdlog {
 namespace sinks {
 
-template <class Mutex>
-class test_sink : public base_sink<Mutex> {
+template <class Mutex, class Alloc = default_allocator_t>
+class test_sink : public base_sink<Mutex, Alloc> {
     const size_t lines_to_save = 100;
 
 public:
+    using string = std::basic_string<char, std::char_traits<char>, Alloc>;
+    using string_alloc = typename std::allocator_traits<Alloc>::template rebind_alloc<string>;
+    using allocator_type = Alloc;
+
+    explicit test_sink(Alloc alloc = Alloc())
+        : base_sink<Mutex, Alloc>(alloc) {}
+
     size_t msg_counter() {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         return msg_counter_;
     }
 
     size_t flush_counter() {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         return flush_counter_;
     }
 
     void set_delay(std::chrono::milliseconds delay) {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+        std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         delay_ = delay;
     }
 
     // return last output without the eol
-    std::vector<std::string> lines() {
-        std::lock_guard<Mutex> lock(base_sink<Mutex>::mutex_);
+    std::vector<string, string_alloc> lines() {
+        std::lock_guard<Mutex> lock(base_sink<Mutex, Alloc>::mutex_);
         return lines_;
     }
 
 protected:
     void sink_it_(const details::log_msg &msg) override {
-        memory_buf_t formatted;
-        base_sink<Mutex>::formatter_->format(msg, formatted);
+        basic_memory_buf_t<Alloc> formatted(this->get_allocator());
+        base_sink<Mutex, Alloc>::formatter_->format(msg, formatted);
         // save the line without the eol
         auto eol_len = strlen(details::os::default_eol);
         using diff_t = typename std::iterator_traits<decltype(formatted.end())>::difference_type;
@@ -60,7 +70,7 @@ protected:
     size_t msg_counter_{0};
     size_t flush_counter_{0};
     std::chrono::milliseconds delay_{std::chrono::milliseconds::zero()};
-    std::vector<std::string> lines_;
+    std::vector<string, string_alloc> lines_;
 };
 
 using test_sink_mt = test_sink<std::mutex>;

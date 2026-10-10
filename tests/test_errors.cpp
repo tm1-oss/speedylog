@@ -9,7 +9,9 @@
 #define SIMPLE_LOG "test_logs/simple_log.txt"
 #define SIMPLE_ASYNC_LOG "test_logs/simple_async_log.txt"
 
-class failing_sink : public spdlog::sinks::base_sink<std::mutex> {
+namespace {
+
+class failing_sink : public spdlog::sinks::base_sink<std::mutex, std::allocator<char>> {
 protected:
     void sink_it_(const spdlog::details::log_msg &) final {
         throw std::runtime_error("some error happened during log");
@@ -18,6 +20,8 @@ protected:
     void flush_() final { throw std::runtime_error("some error happened during flush"); }
 };
 struct custom_ex {};
+
+}  // namespace
 
 #if !defined(SPDLOG_USE_STD_FORMAT)  // std format doesn't fully support runtime strings
 TEST_CASE("default_error_handler", "[errors]") {

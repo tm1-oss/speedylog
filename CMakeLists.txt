@@ -32,6 +32,9 @@ endif()
 if(SPDLOG_USE_STD_FORMAT)
     set(CMAKE_CXX_STANDARD 20)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
+elseif(SPDLOG_POLYMORPHIC_ALLOCATORS)
+    set(CMAKE_CXX_STANDARD 17)
+    set(CMAKE_CXX_STANDARD_REQUIRED ON)
 elseif(NOT CMAKE_CXX_STANDARD)
     set(CMAKE_CXX_STANDARD 11)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -97,6 +100,7 @@ option(SPDLOG_USE_STD_FORMAT "Use std::format instead of fmt library." OFF)
 option(SPDLOG_FMT_EXTERNAL "Use external fmt library instead of bundled" OFF)
 option(SPDLOG_FMT_EXTERNAL_HO "Use external fmt header-only library instead of bundled" OFF)
 option(SPDLOG_NO_EXCEPTIONS "Compile with -fno-exceptions. Call abort() on any spdlog exceptions" OFF)
+option(SPDLOG_POLYMORPHIC_ALLOCATORS "Build shared libs with template instantiations with std::pmr::polymorphic_allocator for Alloc template argument" OFF)
 option(SPDLOG_NO_TZ_OFFSET "Omit %z timezone offset (use on platforms without tm_gmtoff)" OFF)
 
 if(SPDLOG_FMT_EXTERNAL AND SPDLOG_FMT_EXTERNAL_HO)
@@ -167,6 +171,15 @@ if(NOT SPDLOG_USE_STD_FORMAT AND NOT SPDLOG_FMT_EXTERNAL AND NOT SPDLOG_FMT_EXTE
 endif()
 
 if(SPDLOG_BUILD_SHARED OR BUILD_SHARED_LIBS)
+    if(MSVC)
+        if(MSVC_VERSION LESS 1920)
+            message(FATAL_ERROR "Building speedylog as a shared library with MSVC requires Visual Studio 16 2019 (MSVC 19.20+) or newer.")
+        endif()
+        if(CMAKE_CXX_STANDARD LESS 14)
+            message(FATAL_ERROR "Building speedylog as a shared library with MSVC requires C++14 or newer (CMAKE_CXX_STANDARD >= 14).")
+        endif()
+    endif()
+
     if(WIN32)
         configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/version.rc @ONLY)
         list(APPEND SPDLOG_SRCS ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
@@ -288,6 +301,7 @@ foreach(
     SPDLOG_NO_ATOMIC_LEVELS
     SPDLOG_DISABLE_DEFAULT_LOGGER
     SPDLOG_USE_STD_FORMAT
+    SPDLOG_POLYMORPHIC_ALLOCATORS
     SPDLOG_NO_TZ_OFFSET)
     if(${SPDLOG_OPTION})
         target_compile_definitions(speedylog PUBLIC ${SPDLOG_OPTION})

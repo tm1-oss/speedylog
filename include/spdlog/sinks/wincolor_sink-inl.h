@@ -15,11 +15,14 @@
 
 namespace spdlog {
 namespace sinks {
-template <typename ConsoleMutex>
-SPDLOG_INLINE wincolor_sink<ConsoleMutex>::wincolor_sink(void *out_handle, color_mode mode)
-    : out_handle_(out_handle),
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::wincolor_sink(void *out_handle,
+                                                                color_mode mode,
+                                                                Alloc alloc)
+    : sink<Alloc>(alloc),
+      out_handle_(out_handle),
       mutex_(ConsoleMutex::mutex()),
-      formatter_(details::make_unique<spdlog::pattern_formatter>()) {
+      formatter_(details::make_unique<spdlog::basic_pattern_formatter<Alloc>>()) {
     set_color_mode_impl(mode);
     // set level colors
     colors_[level::trace] = FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE;  // white
@@ -34,21 +37,21 @@ SPDLOG_INLINE wincolor_sink<ConsoleMutex>::wincolor_sink(void *out_handle, color
     colors_[level::off] = 0;
 }
 
-template <typename ConsoleMutex>
-SPDLOG_INLINE wincolor_sink<ConsoleMutex>::~wincolor_sink() {
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::~wincolor_sink() {
     this->flush();
 }
 
 // change the color for the given level
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::set_color(level::level_enum level,
-                                                          std::uint16_t color) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::set_color(level::level_enum level,
+                                                                 std::uint16_t color) {
     std::lock_guard<mutex_t> lock(mutex_);
     colors_[static_cast<size_t>(level)] = color;
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::log(const details::log_msg &msg) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::log(const details::log_msg &msg) {
     if (out_handle_ == nullptr || out_handle_ == INVALID_HANDLE_VALUE) {
         return;
     }
@@ -74,32 +77,33 @@ void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::log(const details::log_msg &msg)
     }
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::flush() {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::flush() {
     // windows console always flushed?
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::set_pattern(const std::string &pattern) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::set_pattern(const std::string &pattern) {
     std::lock_guard<mutex_t> lock(mutex_);
-    formatter_ = std::unique_ptr<spdlog::formatter>(new pattern_formatter(pattern));
+    formatter_ = std::unique_ptr<spdlog::basic_formatter<Alloc>>(
+        new basic_pattern_formatter<Alloc>(pattern));
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE
-wincolor_sink<ConsoleMutex>::set_formatter(std::unique_ptr<spdlog::formatter> sink_formatter) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::set_formatter(
+    std::unique_ptr<spdlog::basic_formatter<Alloc>> sink_formatter) {
     std::lock_guard<mutex_t> lock(mutex_);
     formatter_ = std::move(sink_formatter);
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::set_color_mode(color_mode mode) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::set_color_mode(color_mode mode) {
     std::lock_guard<mutex_t> lock(mutex_);
     set_color_mode_impl(mode);
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::set_color_mode_impl(color_mode mode) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::set_color_mode_impl(color_mode mode) {
     if (mode == color_mode::automatic) {
         // should do colors only if out_handle_  points to actual console.
         DWORD console_mode;
@@ -111,9 +115,9 @@ void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::set_color_mode_impl(color_mode m
 }
 
 // set foreground color and return the orig console attributes (for resetting later)
-template <typename ConsoleMutex>
+template <typename ConsoleMutex, class Alloc>
 std::uint16_t SPDLOG_INLINE
-wincolor_sink<ConsoleMutex>::set_foreground_color_(std::uint16_t attribs) {
+wincolor_sink<ConsoleMutex, Alloc>::set_foreground_color_(std::uint16_t attribs) {
     CONSOLE_SCREEN_BUFFER_INFO orig_buffer_info;
     if (!::GetConsoleScreenBufferInfo(static_cast<HANDLE>(out_handle_), &orig_buffer_info)) {
         // just return white if failed getting console info
@@ -129,10 +133,10 @@ wincolor_sink<ConsoleMutex>::set_foreground_color_(std::uint16_t attribs) {
 }
 
 // print a range of formatted message to console
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::print_range_(const memory_buf_t &formatted,
-                                                             size_t start,
-                                                             size_t end) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE wincolor_sink<ConsoleMutex, Alloc>::print_range_(const memory_buf_t &formatted,
+                                                                    size_t start,
+                                                                    size_t end) {
     if (end > start) {
 #if defined(SPDLOG_UTF8_TO_WCHAR_CONSOLE)
         wmemory_buf_t wformatted;
@@ -150,8 +154,9 @@ void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::print_range_(const memory_buf_t 
     }
 }
 
-template <typename ConsoleMutex>
-void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::write_to_file_(const memory_buf_t &formatted) {
+template <typename ConsoleMutex, class Alloc>
+void SPDLOG_INLINE
+wincolor_sink<ConsoleMutex, Alloc>::write_to_file_(const memory_buf_t &formatted) {
     auto size = static_cast<DWORD>(formatted.size());
     DWORD bytes_written = 0;
     auto ignored = ::WriteFile(static_cast<HANDLE>(out_handle_), formatted.data(), size,
@@ -160,13 +165,25 @@ void SPDLOG_INLINE wincolor_sink<ConsoleMutex>::write_to_file_(const memory_buf_
 }
 
 // wincolor_stdout_sink
-template <typename ConsoleMutex>
-SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex>::wincolor_stdout_sink(color_mode mode)
-    : wincolor_sink<ConsoleMutex>(::GetStdHandle(STD_OUTPUT_HANDLE), mode) {}
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex, Alloc>::wincolor_stdout_sink(color_mode mode,
+                                                                              Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_OUTPUT_HANDLE), mode, alloc) {}
+
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stdout_sink<ConsoleMutex, Alloc>::wincolor_stdout_sink(Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(
+          ::GetStdHandle(STD_OUTPUT_HANDLE), color_mode::automatic, alloc) {}
 
 // wincolor_stderr_sink
-template <typename ConsoleMutex>
-SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex>::wincolor_stderr_sink(color_mode mode)
-    : wincolor_sink<ConsoleMutex>(::GetStdHandle(STD_ERROR_HANDLE), mode) {}
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex, Alloc>::wincolor_stderr_sink(color_mode mode,
+                                                                              Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(::GetStdHandle(STD_ERROR_HANDLE), mode, alloc) {}
+
+template <typename ConsoleMutex, class Alloc>
+SPDLOG_INLINE wincolor_stderr_sink<ConsoleMutex, Alloc>::wincolor_stderr_sink(Alloc alloc)
+    : wincolor_sink<ConsoleMutex, Alloc>(
+          ::GetStdHandle(STD_ERROR_HANDLE), color_mode::automatic, alloc) {}
 }  // namespace sinks
 }  // namespace spdlog
