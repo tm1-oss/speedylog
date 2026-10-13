@@ -5,8 +5,8 @@
 *speedylog* is a fork of [*spdlog*](https://github.com/gabime/spdlog) that builds upon its philosophy and carries most of its features. The primary motivation is allocator-aware logging, however that might not be the only distinctive feature. Future changes may include more compact logger objects, making the backtrace feature optional.
 
 *speedylog* aims to track upstream *spdlog* 1.x releases unless they significantly diverge from *speedylog*'s goals. To keep rebasing easy, differences from the upstream are minimised, and the `spdlog` name remains familiar to users of the library. Only the following are renamed:
-  * CMake project and targets
-  * Binaries
+  * CMake project, targets and package
+  * Binaries and the pkg-config file
   * Packaging labels
   * Version macros (`SPEEDYLOG_VERSION`, original `SPDLOG_VERSION` now refers to the latest upstream fully integrated)
 
@@ -14,7 +14,7 @@
 
 ## Install
 #### Header-only version
-Copy the include [folder](include/spdlog) to your build tree and use a C++11 compiler.
+Copy the include [folder](include/spdlog) to your build tree and use a [supported compiler](#compatibility).
 
 #### Compiled version (recommended - much faster compile times)
 ```console
@@ -34,24 +34,59 @@ see example [CMakeLists.txt](example/CMakeLists.txt) on how to use.
 | **MSVC** (Shared) | Visual Studio 16 2019+ | C++14 |
 
 ## Features
-* Very fast (see [benchmarks](#benchmarks) below).
+
+* Very fast (see [benchmarks](#benchmarks) below)
+* [Allocator-aware](#allocator-support) loggers, sinks and formatters, including `std::pmr` support
 * Headers only or compiled
-* Feature-rich formatting, using the excellent [fmt](https://github.com/fmtlib/fmt) library.
+* Feature-rich formatting, using the excellent [fmt](https://github.com/fmtlib/fmt) library
 * Asynchronous mode (optional)
-* [Custom](https://github.com/gabime/spdlog/wiki/Custom-formatting) formatting.
-* Multi/Single threaded loggers.
+* [Custom](https://github.com/gabime/spdlog/wiki/Custom-formatting) formatting
+* Multi- and single-threaded loggers
 * Various log targets:
-  * Rotating log files.
-  * Daily log files.
-  * Console logging (colors supported).
-  * syslog.
-  * Windows event log.
-  * Windows debugger (```OutputDebugString(..)```).
-  * Log to Qt widgets ([example](#log-to-qt-with-nice-colors)).
-  * Easily [extendable](https://github.com/gabime/spdlog/wiki/Sinks#implementing-your-own-sink) with custom log targets.
-* Log filtering - log levels can be modified at runtime as well as compile time.
-* Support for loading log levels from argv or environment var.
-* [Backtrace](#backtrace-support) support - store debug messages in a ring buffer and display them later on demand.
+  * Rotating log files
+  * Daily log files
+  * Console logging (colors supported)
+  * syslog
+  * Windows event log
+  * Windows debugger (`OutputDebugString(..)`)
+  * Log to Qt widgets ([example](#log-to-qt-with-nice-colors))
+  * Easily [extendable](https://github.com/gabime/spdlog/wiki/Sinks#implementing-your-own-sink) with custom log targets
+* Log filtering - log levels can be modified at runtime as well as compile time
+* Support for loading log levels from argv or environment var
+* [Backtrace](#backtrace-support) support - store debug messages in a ring buffer and display them later on demand
+
+### Allocator support
+
+All logger, sink, formatter and thread pool classes are templated on an allocator (`basic_logger<Alloc>`, `basic_async_logger<Alloc>`, `sinks::sink<Alloc>`, etc.). The familiar names (`spdlog::logger`, `spdlog::sinks::*_mt`, ...) are aliases for `std::allocator<char>`, so existing code keeps working unchanged.
+
+A logger takes two allocators:
+* `alloc_fmt_buf` - for the formatting buffer, which may be (re)allocated on log calls
+* `alloc_data` - for the logger name, the sink list and other data living as long as the logger
+
+```c++
+#include <memory_resource>
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/null_sink.h"
+
+// example/example.cpp
+void pmr_example()
+{
+    using alloc = std::pmr::polymorphic_allocator<char>;
+    std::pmr::monotonic_buffer_resource fmt_res, data_res;
+    alloc alloc_fmt{&fmt_res}, alloc_data{&data_res};
+
+    auto sink = std::make_shared<spdlog::sinks::null_sink<std::mutex, alloc>>(alloc_data);
+    spdlog::basic_logger<alloc> logger(std::pmr::string("pmr_logger", alloc_data), sink,
+                                       alloc_fmt, alloc_data);
+    logger.info("Formatted without touching the default heap: {}", 42);
+}
+```
+
+Notes:
+* `std::pmr::polymorphic_allocator<char>` requires C++17. With the compiled library, build it with `-DSPDLOG_POLYMORPHIC_ALLOCATORS=ON` (this also sets the C++ standard to 17), which explicitly instantiates the `polymorphic_allocator` variants.
+* Allocators other than `std::allocator` and `std::pmr::polymorphic_allocator` require header-only integration.
+* Copy, move and swap of loggers honour the allocator propagation traits (`propagate_on_container_copy_assignment`, `..._move_assignment`, `..._swap`).
+* The global thread pool (`spdlog::init_thread_pool`) and registry serve the default allocator only; loggers and thread pools with other allocators use their own `registry<Alloc>`.
 
 ## Usage samples
 
@@ -235,7 +270,7 @@ void multi_sink_example()
 #### Register several loggers - change global level
 ```c++
 
-// Creation of loggers. Set levels to all registered loggers. 
+// Creation of loggers. Set levels to all registered loggers.
 void set_level_example()
 {
     auto logger1 = spdlog::basic_logger_mt("logger1", "logs/logger1.txt");
@@ -246,10 +281,10 @@ void set_level_example()
 
     spdlog::trace("trace message to the logger2 (specified as default)");
 
-    spdlog::set_level(spdlog::level::off) // (sic!) set level for *all* registered loggers to off (disable)
-  
-    logger1.warn("warn message will not appear because the level set to off");
-    logger2.warn("warn message will not appear because the level set to off");
+    spdlog::set_level(spdlog::level::off); // (sic!) set level for *all* registered loggers to off (disable)
+
+    logger1->warn("warn message will not appear because the level set to off");
+    logger2->warn("warn message will not appear because the level set to off");
     spdlog::warn("warn message will not appear because the level set to off");
 }
 ```
