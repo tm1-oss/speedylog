@@ -27,6 +27,7 @@ void custom_flags_example();
 void file_events_example();
 void replace_default_logger_example();
 void mdc_example();
+void pmr_example();
 
 #include "spdlog/spdlog.h"
 #include "spdlog/cfg/env.h"   // support for loading levels from the environment variable
@@ -86,6 +87,7 @@ int main(int, char *[]) {
         file_events_example();
         replace_default_logger_example();
         mdc_example();
+        pmr_example();
 
         // Flush all *registered* loggers using a worker thread every 3 seconds.
         // note: registered loggers *must* be thread safe for this to work correctly!
@@ -397,5 +399,28 @@ void mdc_example() {
 #else
 void mdc_example() {
     // if TLS feature is disabled
+}
+#endif
+
+// Allocator-aware logging with std::pmr. Requires C++17 and, when using the compiled library,
+// building it with -DSPDLOG_POLYMORPHIC_ALLOCATORS=ON.
+// libc++ gained <memory_resource> in version 16; exclude older libc++ builds.
+#if (defined(SPDLOG_POLYMORPHIC_ALLOCATORS) ||                   \
+     (defined(SPDLOG_HEADER_ONLY) && __cplusplus >= 201703L)) && \
+    (!defined(_LIBCPP_VERSION) || _LIBCPP_VERSION >= 160000)
+#include <memory_resource>
+#include "spdlog/sinks/null_sink.h"
+void pmr_example() {
+    using alloc = std::pmr::polymorphic_allocator<char>;
+    std::pmr::monotonic_buffer_resource fmt_res, data_res;
+    alloc alloc_fmt{&fmt_res}, alloc_data{&data_res};
+
+    auto sink = std::make_shared<spdlog::sinks::null_sink<std::mutex, alloc>>(alloc_data);
+    spdlog::basic_logger<alloc> logger(std::pmr::string("pmr_logger", alloc_data), sink, alloc_fmt,
+                                       alloc_data);
+    logger.info("Formatted without touching the default heap: {}", 42);
+}
+#else
+void pmr_example() {
 }
 #endif
