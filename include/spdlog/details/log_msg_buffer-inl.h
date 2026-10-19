@@ -31,6 +31,7 @@ SPDLOG_INLINE log_msg_buffer::log_msg_buffer(log_msg_buffer &&other) SPDLOG_NOEX
 }
 
 SPDLOG_INLINE log_msg_buffer &log_msg_buffer::operator=(const log_msg_buffer &other) {
+    if (this == &other) return *this;
     log_msg::operator=(other);
     buffer.clear();
     buffer.append(other.buffer.data(), other.buffer.data() + other.buffer.size());
@@ -39,6 +40,7 @@ SPDLOG_INLINE log_msg_buffer &log_msg_buffer::operator=(const log_msg_buffer &ot
 }
 
 SPDLOG_INLINE log_msg_buffer &log_msg_buffer::operator=(log_msg_buffer &&other) SPDLOG_NOEXCEPT {
+    if (this == &other) return *this;
     log_msg::operator=(other);
     buffer = std::move(other.buffer);
     update_string_views();
